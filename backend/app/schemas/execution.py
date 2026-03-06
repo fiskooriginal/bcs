@@ -1,6 +1,5 @@
 import uuid
 from datetime import datetime
-from typing import Optional
 
 from pydantic import BaseModel, Field, field_serializer
 
@@ -41,22 +40,22 @@ class ScriptExecutionCreate(ScriptExecutionBase):
 
 
 class ScriptExecutionUpdate(BaseModel):
-    status: Optional[str] = None
-    finished_at: Optional[datetime] = None
-    exit_code: Optional[int] = None
+    status: str | None = None
+    finished_at: datetime | None = None
+    exit_code: int | None = None
 
 
 class ScriptExecutionResponse(ScriptExecutionBase):
     id: uuid.UUID
     script_id: uuid.UUID
     started_at: datetime
-    finished_at: Optional[datetime]
-    exit_code: Optional[int]
+    finished_at: datetime | None
+    exit_code: int | None
 
     model_config = {"from_attributes": True}
 
     @field_serializer("started_at", "finished_at")
-    def serialize_datetime(self, dt: Optional[datetime]) -> Optional[str]:
+    def serialize_datetime(self, dt: datetime | None) -> str | None:
         """Сериализует naive datetime как UTC ISO 8601 с Z суффиксом"""
         if dt is None:
             return None
@@ -75,14 +74,14 @@ class ScriptExecutionListResponse(BaseModel):
     status: str
     triggered_by: str
     started_at: datetime
-    finished_at: Optional[datetime]
-    exit_code: Optional[int]
+    finished_at: datetime | None
+    exit_code: int | None
     log_count: int = 0
 
     model_config = {"from_attributes": True}
 
     @field_serializer("started_at", "finished_at")
-    def serialize_datetime(self, dt: Optional[datetime]) -> Optional[str]:
+    def serialize_datetime(self, dt: datetime | None) -> str | None:
         """Сериализует naive datetime как UTC ISO 8601 с Z суффиксом"""
         if dt is None:
             return None

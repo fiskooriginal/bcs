@@ -1,7 +1,6 @@
 import ast
 import uuid
 from pathlib import Path
-from typing import Optional
 
 import aiofiles
 from fastapi import HTTPException
@@ -24,7 +23,7 @@ class ScriptService:
         stem = Path(filename).stem
         return stem.replace("_", " ").replace("-", " ").title()
 
-    async def _extract_docstring(self, filename: str) -> Optional[str]:
+    async def _extract_docstring(self, filename: str) -> str | None:
         file_path = self._get_script_path(filename)
         try:
             async with aiofiles.open(file_path, "r", encoding="utf-8") as f:

@@ -2,7 +2,6 @@ import asyncio
 import sys
 import uuid
 from pathlib import Path
-from typing import Optional
 
 from fastapi import HTTPException
 from sqlalchemy import select
@@ -104,7 +103,7 @@ class ExecutionService:
         db: AsyncSession,
         execution_id: uuid.UUID,
         status: str,
-        exit_code: Optional[int] = None,
+        exit_code: int | None = None,
     ) -> ScriptExecution:
         execution = await self.get_execution(db, execution_id)
 

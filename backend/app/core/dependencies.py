@@ -1,5 +1,4 @@
 from pathlib import Path
-from typing import Optional
 
 from app.core.config import settings
 from app.core.database import async_session_factory
@@ -9,9 +8,9 @@ from app.services.script_service import ScriptService
 
 
 class ServiceContainer:
-    _script_service: Optional[ScriptService] = None
-    _execution_service: Optional[ExecutionService] = None
-    _scheduler_service: Optional[SchedulerService] = None
+    _script_service: ScriptService | None = None
+    _execution_service: ExecutionService | None = None
+    _scheduler_service: SchedulerService | None = None
 
     @classmethod
     def initialize(cls) -> None:
@@ -39,15 +38,3 @@ class ServiceContainer:
         if cls._scheduler_service is None:
             raise RuntimeError("ServiceContainer is not initialized")
         return cls._scheduler_service
-
-
-def get_script_service() -> ScriptService:
-    return ServiceContainer.get_script_service()
-
-
-def get_execution_service() -> ExecutionService:
-    return ServiceContainer.get_execution_service()
-
-
-def get_scheduler_service() -> SchedulerService:
-    return ServiceContainer.get_scheduler_service()

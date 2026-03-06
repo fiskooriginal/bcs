@@ -2,7 +2,6 @@
 import asyncio
 import time
 from datetime import datetime
-from typing import Dict
 
 import aiohttp
 
@@ -11,7 +10,7 @@ MONITORED_DOMAINS = ["https://www.google.com", "https://www.github.com", "https:
 TIMEOUT_SECONDS = 5
 
 
-async def check_domain_availability(session: aiohttp.ClientSession, url: str) -> Dict[str, any]:
+async def check_domain_availability(session: aiohttp.ClientSession, url: str) -> dict[str, any]:
     """
     Асинхронно проверяет доступность домена и возвращает результаты проверки.
     """
@@ -43,7 +42,7 @@ async def check_domain_availability(session: aiohttp.ClientSession, url: str) ->
         return {"url": url, "status_code": None, "response_time_ms": None, "is_available": False, "error": str(e)}
 
 
-def format_result_log(result: Dict[str, any]) -> str:
+def format_result_log(result: dict[str, any]) -> str:
     """
     Форматирует результат проверки для вывода в лог.
     """

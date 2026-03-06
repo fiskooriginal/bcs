@@ -3,13 +3,12 @@ import asyncio
 import os
 import shutil
 from datetime import datetime
-from typing import Dict
 
 THRESHOLD_WARNING_PERCENT = 75
 THRESHOLD_CRITICAL_PERCENT = 90
 
 
-async def get_disk_usage(path: str = "/") -> Dict[str, any]:
+async def get_disk_usage(path: str = "/") -> dict[str, any]:
     """
     Асинхронно получает информацию об использовании дискового пространства.
     """

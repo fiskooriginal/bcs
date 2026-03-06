@@ -2,8 +2,7 @@ import uuid
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-from app.core.database import get_db
-from app.core.dependencies import ServiceContainer
+from app.api.di import get_db, get_execution_service
 from app.core.websocket import ws_manager
 
 router = APIRouter(prefix="/api/ws", tags=["websocket"])
@@ -11,7 +10,7 @@ router = APIRouter(prefix="/api/ws", tags=["websocket"])
 
 @router.websocket("/logs/{execution_id}")
 async def websocket_logs(websocket: WebSocket, execution_id: uuid.UUID):
-    execution_service = ServiceContainer.get_execution_service()
+    execution_service = get_execution_service()
 
     async for db in get_db():
         try:

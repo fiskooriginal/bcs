@@ -3,8 +3,8 @@ import uuid
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_db_session
-from app.core.dependencies import (
+from app.api.di import (
+    get_db_session,
     get_execution_service,
     get_scheduler_service,
     get_script_service,

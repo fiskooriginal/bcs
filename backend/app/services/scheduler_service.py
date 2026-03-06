@@ -1,5 +1,4 @@
 import uuid
-from typing import Optional
 
 from apscheduler import AsyncScheduler, ConflictPolicy
 from apscheduler.datastores.sqlalchemy import SQLAlchemyDataStore
@@ -34,7 +33,7 @@ async def execute_scheduled_script(script_id: str | uuid.UUID) -> None:
 class SchedulerService:
     def __init__(self, execution_service: ExecutionService):
         self.execution_service = execution_service
-        self.scheduler: Optional[AsyncScheduler] = None
+        self.scheduler: AsyncScheduler | None = None
         self._is_started = False
 
     async def initialize(self) -> None:
@@ -127,7 +126,7 @@ class SchedulerService:
         except Exception as e:
             raise HTTPException(status_code=404, detail=f"Schedule not found: {str(e)}")
 
-    async def get_schedule(self, script_id: uuid.UUID) -> Optional[dict]:
+    async def get_schedule(self, script_id: uuid.UUID) -> dict | None:
         if not self.scheduler:
             raise RuntimeError("Scheduler not initialized")
 

@@ -1,6 +1,7 @@
 """Test script for real-time log streaming"""
-import time
+
 import sys
+import time
 
 print("Starting real-time log test...")
 time.sleep(1)

@@ -2,7 +2,6 @@
 import asyncio
 import time
 from datetime import datetime, timedelta
-from typing import Dict
 from zoneinfo import ZoneInfo
 
 import aiofiles
@@ -10,7 +9,7 @@ import aiofiles
 REPORT_TIMEZONES = ["UTC", "Europe/Moscow", "America/New_York", "Asia/Tokyo", "Europe/London"]
 
 
-async def get_current_time_in_timezone(tz_name: str) -> Dict[str, any]:
+async def get_current_time_in_timezone(tz_name: str) -> dict[str, any]:
     """
     Асинхронно получает текущее время в указанной временной зоне.
     """
@@ -41,7 +40,7 @@ async def get_current_time_in_timezone(tz_name: str) -> Dict[str, any]:
         }
 
 
-async def get_system_uptime_info() -> Dict[str, any]:
+async def get_system_uptime_info() -> dict[str, any]:
     """
     Асинхронно получает информацию о времени работы системы (если доступно).
     """
@@ -74,7 +73,7 @@ async def get_system_uptime_info() -> Dict[str, any]:
         }
 
 
-async def calculate_time_until_midnight(tz_name: str = "UTC") -> Dict[str, any]:
+async def calculate_time_until_midnight(tz_name: str = "UTC") -> dict[str, any]:
     """
     Асинхронно вычисляет время до полуночи в указанной временной зоне.
     """

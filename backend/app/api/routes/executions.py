@@ -4,8 +4,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_db_session
-from app.core.dependencies import get_execution_service
+from app.api.di import get_db_session, get_execution_service
 from app.models.execution import ScriptLog
 from app.schemas.execution import (
     ScriptExecutionDetailResponse,

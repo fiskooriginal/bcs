@@ -1,5 +1,4 @@
 import uuid
-from typing import Dict, Set
 
 from fastapi import WebSocket
 
@@ -8,7 +7,7 @@ from app.models.execution import ScriptLog
 
 class WebSocketManager:
     def __init__(self):
-        self.active_connections: Dict[uuid.UUID, Set[WebSocket]] = {}
+        self.active_connections: dict[uuid.UUID, set[WebSocket]] = {}
 
     async def connect(self, websocket: WebSocket, execution_id: uuid.UUID):
         await websocket.accept()
