@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { scriptsApi } from '@/api/scripts';
 import type { ScriptUpdate } from '@/types';
 
@@ -6,6 +6,7 @@ export const useScripts = () => {
   return useQuery({
     queryKey: ['scripts'],
     queryFn: scriptsApi.getAll,
+    placeholderData: keepPreviousData,
   });
 };
 
@@ -14,6 +15,7 @@ export const useScript = (id: string) => {
     queryKey: ['scripts', id],
     queryFn: () => scriptsApi.getById(id),
     enabled: !!id,
+    placeholderData: keepPreviousData,
   });
 };
 
@@ -69,6 +71,8 @@ export const useRunScript = () => {
     mutationFn: (id: string) => scriptsApi.run(id),
     onSuccess: (_, id) => {
       queryClient.invalidateQueries({ queryKey: ['scripts', id, 'executions'] });
+      queryClient.invalidateQueries({ queryKey: ['scripts', id, 'executions-infinite'] });
+      queryClient.invalidateQueries({ queryKey: ['scripts', id, 'executions-count'] });
     },
   });
 };

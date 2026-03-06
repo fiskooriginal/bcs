@@ -16,7 +16,7 @@ interface LogViewerProps {
 }
 
 export function LogViewer({ executionId, realTime = false }: LogViewerProps) {
-  const logsEndRef = useRef<HTMLDivElement>(null);
+  const logsContainerRef = useRef<HTMLDivElement>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [autoScroll, setAutoScroll] = useState(true);
 
@@ -34,8 +34,8 @@ export function LogViewer({ executionId, realTime = false }: LogViewerProps) {
     : logs;
 
   useEffect(() => {
-    if (autoScroll) {
-      logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (autoScroll && logsContainerRef.current) {
+      logsContainerRef.current.scrollTop = logsContainerRef.current.scrollHeight;
     }
   }, [logs, autoScroll]);
 
@@ -153,7 +153,10 @@ export function LogViewer({ executionId, realTime = false }: LogViewerProps) {
         </div>
       </CardHeader>
       <CardContent>
-        <div className="bg-black text-white font-mono text-sm p-4 rounded-lg max-h-[500px] overflow-y-auto">
+        <div
+          ref={logsContainerRef}
+          className="bg-black text-white font-mono text-sm p-4 rounded-lg max-h-[500px] overflow-y-auto"
+        >
           {filteredLogs.length === 0 ? (
             <p className="text-muted-foreground">
               {searchTerm ? 'No matching logs found' : 'No logs yet...'}
@@ -175,7 +178,6 @@ export function LogViewer({ executionId, realTime = false }: LogViewerProps) {
               ))}
             </div>
           )}
-          <div ref={logsEndRef} />
         </div>
 
         {logs.length > 0 && (

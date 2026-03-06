@@ -41,3 +41,14 @@ export interface WebSocketMessage {
   type: 'log' | 'status' | 'error';
   data: ScriptLog | { status: ExecutionStatus; exit_code?: number } | { message: string };
 }
+
+export interface ExecutionUpdateMessage {
+  type: 'execution_update';
+  data: {
+    script_id: string;
+    execution_id: string;
+    event: string;
+    status?: string;
+    exit_code?: number;
+  };
+}

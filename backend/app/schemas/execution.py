@@ -68,6 +68,10 @@ class ScriptExecutionDetailResponse(ScriptExecutionResponse):
     model_config = {"from_attributes": True}
 
 
+class ScriptExecutionsCountResponse(BaseModel):
+    total: int = Field(..., description="Total number of executions for the script")
+
+
 class ScriptExecutionListResponse(BaseModel):
     id: uuid.UUID
     script_id: uuid.UUID

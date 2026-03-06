@@ -6,8 +6,10 @@ import { RefreshCw, FileCode, Calendar, CheckCircle2, XCircle, Clock } from 'luc
 import { TooltipProvider } from './components/ui/tooltip';
 import { useScripts } from './hooks/useScripts';
 import { useSyncScripts } from './hooks/useScripts';
+import { useScriptUpdates } from './hooks/useScriptUpdates';
 
 function App() {
+  useScriptUpdates();
   const { data: scripts } = useScripts();
   const syncMutation = useSyncScripts();
 

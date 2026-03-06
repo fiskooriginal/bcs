@@ -10,6 +10,7 @@ from app.schemas.execution import (
     ScriptExecutionDetailResponse,
     ScriptExecutionListResponse,
     ScriptExecutionResponse,
+    ScriptExecutionsCountResponse,
     ScriptLogResponse,
 )
 from app.services.execution_service import ExecutionService
@@ -21,10 +22,11 @@ router = APIRouter(prefix="/api", tags=["executions"])
 async def get_script_executions(
     script_id: uuid.UUID,
     limit: int = 50,
+    offset: int = 0,
     db: AsyncSession = Depends(get_db_session),
     execution_service: ExecutionService = Depends(get_execution_service),
 ):
-    executions = await execution_service.get_script_executions(db, script_id, limit)
+    executions = await execution_service.get_script_executions(db, script_id, limit, offset)
 
     result = []
     for execution in executions:
@@ -46,6 +48,19 @@ async def get_script_executions(
         )
 
     return result
+
+
+@router.get(
+    "/scripts/{script_id}/executions/count",
+    response_model=ScriptExecutionsCountResponse,
+)
+async def get_script_executions_count(
+    script_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db_session),
+    execution_service: ExecutionService = Depends(get_execution_service),
+):
+    total = await execution_service.count_script_executions(db, script_id)
+    return ScriptExecutionsCountResponse(total=total)
 
 
 @router.get("/executions/{execution_id}", response_model=ScriptExecutionDetailResponse)

@@ -8,6 +8,7 @@ from app.models.execution import ScriptLog
 class WebSocketManager:
     def __init__(self):
         self.active_connections: dict[uuid.UUID, set[WebSocket]] = {}
+        self.global_connections: set[WebSocket] = set()
 
     async def connect(self, websocket: WebSocket, execution_id: uuid.UUID):
         await websocket.accept()
@@ -70,6 +71,45 @@ class WebSocketManager:
 
         for connection in disconnected:
             self.disconnect(connection, execution_id)
+
+    def connect_global(self, websocket: WebSocket) -> None:
+        self.global_connections.add(websocket)
+
+    def disconnect_global(self, websocket: WebSocket) -> None:
+        self.global_connections.discard(websocket)
+
+    async def broadcast_execution_update(
+        self,
+        script_id: uuid.UUID,
+        execution_id: uuid.UUID,
+        event: str,
+        status: str | None = None,
+        exit_code: int | None = None,
+    ) -> None:
+        if not self.global_connections:
+            return
+
+        data: dict = {
+            "script_id": str(script_id),
+            "execution_id": str(execution_id),
+            "event": event,
+        }
+        if status is not None:
+            data["status"] = status
+        if exit_code is not None:
+            data["exit_code"] = exit_code
+
+        message = {"type": "execution_update", "data": data}
+        disconnected: set[WebSocket] = set()
+
+        for connection in self.global_connections:
+            try:
+                await connection.send_json(message)
+            except Exception:
+                disconnected.add(connection)
+
+        for connection in disconnected:
+            self.disconnect_global(connection)
 
 
 ws_manager = WebSocketManager()

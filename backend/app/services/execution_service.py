@@ -4,7 +4,7 @@ import uuid
 from pathlib import Path
 
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
 
@@ -34,10 +34,7 @@ class ExecutionService:
             raise HTTPException(status_code=404, detail="Script not found")
 
         execution = ScriptExecution(
-            script_id=script_id,
-            status="pending",
-            triggered_by=triggered_by,
-            started_at=utc_now(),
+            script_id=script_id, status="pending", triggered_by=triggered_by, started_at=utc_now()
         )
 
         db.add(execution)
@@ -65,16 +62,23 @@ class ExecutionService:
         db: AsyncSession,
         script_id: uuid.UUID,
         limit: int = 50,
+        offset: int = 0,
     ) -> list[ScriptExecution]:
         stmt = (
             select(ScriptExecution)
             .where(ScriptExecution.script_id == script_id)
             .order_by(ScriptExecution.started_at.desc())
             .limit(limit)
+            .offset(offset)
         )
 
         result = await db.execute(stmt)
         return list(result.scalars().all())
+
+    async def count_script_executions(self, db: AsyncSession, script_id: uuid.UUID) -> int:
+        stmt = select(func.count(ScriptExecution.id)).where(ScriptExecution.script_id == script_id)
+        result = await db.execute(stmt)
+        return result.scalar() or 0
 
     async def add_log(
         self,
@@ -84,13 +88,7 @@ class ExecutionService:
         stream: str = "stdout",
         level: str = "INFO",
     ) -> ScriptLog:
-        log = ScriptLog(
-            execution_id=execution_id,
-            level=level,
-            message=message,
-            stream=stream,
-            timestamp=utc_now(),
-        )
+        log = ScriptLog(execution_id=execution_id, level=level, message=message, stream=stream, timestamp=utc_now())
 
         db.add(log)
         await db.commit()
@@ -140,27 +138,30 @@ class ExecutionService:
 
         execution = await self.create_execution(db, script_id, triggered_by)
 
-        # Background task uses its own session — the request session will be
-        # closed as soon as the response is sent.
-        asyncio.create_task(self._execute_script(execution.id, script_path))
+        await ws_manager.broadcast_execution_update(
+            script_id=script_id, execution_id=execution.id, event="created", status=execution.status
+        )
+
+        asyncio.create_task(self._execute_script(execution.id, script_id, script_path))
 
         return execution
 
     async def _execute_script(
         self,
         execution_id: uuid.UUID,
+        script_id: uuid.UUID,
         script_path: Path,
     ) -> None:
         async with self.session_factory() as db:
             try:
                 await self.update_execution_status(db, execution_id, "running")
 
+                await ws_manager.broadcast_execution_update(
+                    script_id=script_id, execution_id=execution_id, event="status", status="running"
+                )
+
                 await self.add_log(
-                    db,
-                    execution_id,
-                    f"Starting execution of script: {script_path.name}",
-                    stream="stdout",
-                    level="INFO",
+                    db, execution_id, f"Starting execution of script: {script_path.name}", stream="stdout", level="INFO"
                 )
 
                 process = await asyncio.create_subprocess_exec(
@@ -183,13 +184,7 @@ class ExecutionService:
 
                         if message:
                             level = "ERROR" if stream_name == "stderr" else "INFO"
-                            log_entry = await self.add_log(
-                                db,
-                                execution_id,
-                                message,
-                                stream=stream_name,
-                                level=level,
-                            )
+                            log_entry = await self.add_log(db, execution_id, message, stream=stream_name, level=level)
 
                             await ws_manager.broadcast_log(execution_id, log_entry)
 
@@ -215,16 +210,15 @@ class ExecutionService:
                 else:
                     status = "failed"
                     log_entry = await self.add_log(
-                        db,
-                        execution_id,
-                        f"Script failed with exit code {exit_code}",
-                        stream="stderr",
-                        level="ERROR",
+                        db, execution_id, f"Script failed with exit code {exit_code}", stream="stderr", level="ERROR"
                     )
                     await ws_manager.broadcast_log(execution_id, log_entry)
 
                 await self.update_execution_status(db, execution_id, status, exit_code)
                 await ws_manager.broadcast_status(execution_id, status, exit_code)
+                await ws_manager.broadcast_execution_update(
+                    script_id=script_id, execution_id=execution_id, event="status", status=status, exit_code=exit_code
+                )
 
             except asyncio.CancelledError:
                 log_entry = await self.add_log(
@@ -237,6 +231,9 @@ class ExecutionService:
                 await ws_manager.broadcast_log(execution_id, log_entry)
                 await self.update_execution_status(db, execution_id, "cancelled", exit_code=-1)
                 await ws_manager.broadcast_status(execution_id, "cancelled", -1)
+                await ws_manager.broadcast_execution_update(
+                    script_id=script_id, execution_id=execution_id, event="status", status="cancelled", exit_code=-1
+                )
                 self.active_processes.pop(execution_id, None)
                 raise
 
@@ -251,6 +248,9 @@ class ExecutionService:
                 await ws_manager.broadcast_log(execution_id, log_entry)
                 await self.update_execution_status(db, execution_id, "failed", exit_code=-1)
                 await ws_manager.broadcast_status(execution_id, "failed", -1)
+                await ws_manager.broadcast_execution_update(
+                    script_id=script_id, execution_id=execution_id, event="status", status="failed", exit_code=-1
+                )
                 self.active_processes.pop(execution_id, None)
 
     async def stop_execution(self, db: AsyncSession, execution_id: uuid.UUID) -> ScriptExecution:
@@ -288,5 +288,12 @@ class ExecutionService:
                 self.active_processes.pop(execution_id, None)
 
         await self.update_execution_status(db, execution_id, "cancelled", exit_code=-1)
+        await ws_manager.broadcast_execution_update(
+            script_id=execution.script_id,
+            execution_id=execution_id,
+            event="status",
+            status="cancelled",
+            exit_code=-1,
+        )
 
         return execution

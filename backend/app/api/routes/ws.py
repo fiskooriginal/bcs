@@ -57,3 +57,17 @@ async def websocket_logs(websocket: WebSocket, execution_id: uuid.UUID):
         finally:
             await db.close()
             break
+
+
+@router.websocket("/updates")
+async def websocket_updates(websocket: WebSocket):
+    await websocket.accept()
+    ws_manager.connect_global(websocket)
+
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        ws_manager.disconnect_global(websocket)
+    except Exception:
+        ws_manager.disconnect_global(websocket)

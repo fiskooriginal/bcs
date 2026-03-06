@@ -12,6 +12,28 @@ from app.models.script import Script
 from app.services.execution_service import ExecutionService
 
 
+def _create_cron_trigger(cron_expression: str) -> CronTrigger:
+    """
+    Create CronTrigger from 5 or 6-field cron expression.
+    5 fields: minute, hour, day, month, day_of_week (standard UNIX cron).
+    6 fields: second, minute, hour, day, month, day_of_week (Quartz format).
+    """
+    parts = cron_expression.split()
+    if len(parts) == 6:
+        second, minute, hour, day, month, day_of_week = parts
+        return CronTrigger(
+            second=second,
+            minute=minute,
+            hour=hour,
+            day=day,
+            month=month,
+            day_of_week=day_of_week,
+        )
+    if len(parts) == 5:
+        return CronTrigger.from_crontab(cron_expression)
+    raise ValueError(f"Wrong number of fields; got {len(parts)}, expected 5 or 6")
+
+
 async def execute_scheduled_script(script_id: str | uuid.UUID) -> None:
     """Module-level callable for APScheduler — must be importable by ref."""
     from app.core.dependencies import ServiceContainer
@@ -77,7 +99,7 @@ class SchedulerService:
             raise HTTPException(status_code=400, detail="Cron expression cannot be empty")
 
         try:
-            trigger = CronTrigger.from_crontab(cron_expression)
+            trigger = _create_cron_trigger(cron_expression.strip())
         except ValueError as e:
             raise HTTPException(status_code=400, detail=f"Invalid cron expression: {str(e)}")
 

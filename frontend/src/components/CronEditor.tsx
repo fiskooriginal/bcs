@@ -18,15 +18,19 @@ interface CronEditorProps {
 }
 
 const CRON_PRESETS = [
-  { label: 'Every minute', value: '* * * * *' },
-  { label: 'Every 5 minutes', value: '*/5 * * * *' },
-  { label: 'Every 15 minutes', value: '*/15 * * * *' },
-  { label: 'Every 30 minutes', value: '*/30 * * * *' },
-  { label: 'Every hour', value: '0 * * * *' },
-  { label: 'Daily at midnight', value: '0 0 * * *' },
-  { label: 'Daily at noon', value: '0 12 * * *' },
-  { label: 'Weekly on Monday', value: '0 0 * * 1' },
-  { label: 'Monthly on 1st', value: '0 0 1 * *' },
+  { label: 'Every second', value: '* * * * * *' },
+  { label: 'Every 5 seconds', value: '*/5 * * * * *' },
+  { label: 'Every 10 seconds', value: '*/10 * * * * *' },
+  { label: 'Every 30 seconds', value: '*/30 * * * * *' },
+  { label: 'Every minute', value: '0 * * * * *' },
+  { label: 'Every 5 minutes', value: '0 */5 * * * *' },
+  { label: 'Every 15 minutes', value: '0 */15 * * * *' },
+  { label: 'Every 30 minutes', value: '0 */30 * * * *' },
+  { label: 'Every hour', value: '0 0 * * * *' },
+  { label: 'Daily at midnight', value: '0 0 0 * * *' },
+  { label: 'Daily at noon', value: '0 0 12 * * *' },
+  { label: 'Weekly on Monday', value: '0 0 0 * * 1' },
+  { label: 'Monthly on 1st', value: '0 0 0 1 * *' },
 ];
 
 export function CronEditor({ value, onChange }: CronEditorProps) {
@@ -65,7 +69,7 @@ export function CronEditor({ value, onChange }: CronEditorProps) {
               id="cron"
               value={value}
               onChange={(e) => onChange(e.target.value)}
-              placeholder="0 0 * * * (daily at midnight)"
+              placeholder="0 0 0 * * * (daily at midnight)"
               className={`pl-10 ${!isValid && value ? 'border-destructive' : ''}`}
             />
           </div>
@@ -92,7 +96,7 @@ export function CronEditor({ value, onChange }: CronEditorProps) {
           </p>
         )}
         <p className="text-xs text-muted-foreground">
-          Format: minute hour day month weekday (e.g., 0 0 * * * = daily at midnight)
+          Format: second minute hour day month weekday (6 fields) or minute hour day month weekday (5 fields). E.g. * * * * * * = every second
         </p>
       </div>
 
@@ -104,36 +108,54 @@ export function CronEditor({ value, onChange }: CronEditorProps) {
             variant="ghost"
             size="sm"
             className="justify-start h-auto py-1"
-            onClick={() => handlePresetSelect('0 0 * * *')}
+            onClick={() => handlePresetSelect('* * * * * *')}
           >
-            <code className="mr-2">0 0 * * *</code> - Daily at midnight
+            <code className="mr-2">* * * * * *</code> - Every second
           </Button>
           <Button
             type="button"
             variant="ghost"
             size="sm"
             className="justify-start h-auto py-1"
-            onClick={() => handlePresetSelect('0 */6 * * *')}
+            onClick={() => handlePresetSelect('0 0 0 * * *')}
           >
-            <code className="mr-2">0 */6 * * *</code> - Every 6 hours
+            <code className="mr-2">0 0 0 * * *</code> - Daily at midnight
           </Button>
           <Button
             type="button"
             variant="ghost"
             size="sm"
             className="justify-start h-auto py-1"
-            onClick={() => handlePresetSelect('0 9 * * 1-5')}
+            onClick={() => handlePresetSelect('0 */5 * * * *')}
           >
-            <code className="mr-2">0 9 * * 1-5</code> - Weekdays at 9 AM
+            <code className="mr-2">0 */5 * * * *</code> - Every 5 minutes
           </Button>
           <Button
             type="button"
             variant="ghost"
             size="sm"
             className="justify-start h-auto py-1"
-            onClick={() => handlePresetSelect('0 0 1 * *')}
+            onClick={() => handlePresetSelect('0 0 */6 * * *')}
           >
-            <code className="mr-2">0 0 1 * *</code> - First of month
+            <code className="mr-2">0 0 */6 * * *</code> - Every 6 hours
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="justify-start h-auto py-1"
+            onClick={() => handlePresetSelect('0 0 9 * * 1-5')}
+          >
+            <code className="mr-2">0 0 9 * * 1-5</code> - Weekdays at 9 AM
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="justify-start h-auto py-1"
+            onClick={() => handlePresetSelect('0 0 0 1 * *')}
+          >
+            <code className="mr-2">0 0 0 1 * *</code> - First of month
           </Button>
         </div>
       </div>

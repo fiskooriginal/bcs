@@ -22,7 +22,7 @@ import type { Script } from '@/types';
 import cronstrue from 'cronstrue';
 import { ScriptDetailsDialog } from './ScriptDetailsDialog';
 import { ExecutionDialog } from './ExecutionDialog';
-import { formatRelativeTime } from '@/lib/date-utils';
+import { RelativeTime } from './RelativeTime';
 
 interface ScriptCardProps {
   script: Script;
@@ -109,6 +109,26 @@ export function ScriptCard({ script }: ScriptCardProps) {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  onClick={handleToggleActive}
+                  disabled={
+                    !script.cron_expression ||
+                    activateMutation.isPending ||
+                    deactivateMutation.isPending
+                  }
+                >
+                  {script.is_active ? (
+                    <>
+                      <Pause className="mr-2 h-4 w-4" />
+                      Deactivate
+                    </>
+                  ) : (
+                    <>
+                      <Play className="mr-2 h-4 w-4" />
+                      Activate
+                    </>
+                  )}
+                </DropdownMenuItem>
                 <DropdownMenuItem onClick={handleRun} disabled={runMutation.isPending}>
                   <Play className="mr-2 h-4 w-4" />
                   Run Now
@@ -144,9 +164,10 @@ export function ScriptCard({ script }: ScriptCardProps) {
               >
                 {lastExecution.status}
               </Badge>
-              <span className="text-xs text-muted-foreground">
-                {formatRelativeTime(lastExecution.started_at)}
-              </span>
+              <RelativeTime
+                dateString={lastExecution.started_at}
+                className="text-xs text-muted-foreground"
+              />
             </div>
           )}
 
@@ -157,9 +178,11 @@ export function ScriptCard({ script }: ScriptCardProps) {
             >
               {script.is_active ? '● Active' : '○ Inactive'}
             </Badge>
-            <span className="text-xs text-muted-foreground">
-              Updated {formatRelativeTime(script.updated_at)}
-            </span>
+            <RelativeTime
+              dateString={script.updated_at}
+              className="text-xs text-muted-foreground"
+              prefix="Updated"
+            />
           </div>
         </CardContent>
 
