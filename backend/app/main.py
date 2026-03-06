@@ -5,11 +5,14 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import executions, scripts, ws
 from app.core.database import async_session_factory, get_db
-from app.services.scheduler_service import scheduler_service
+from app.core.dependencies import ServiceContainer
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    ServiceContainer.initialize()
+
+    scheduler_service = ServiceContainer.get_scheduler_service()
     await scheduler_service.initialize()
 
     async for db in get_db():

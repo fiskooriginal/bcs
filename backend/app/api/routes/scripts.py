@@ -5,6 +5,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db_session
 from app.core.database import async_session_factory
+from app.core.dependencies import (
+    get_execution_service,
+    get_scheduler_service,
+    get_script_service,
+)
 from app.schemas.script import (
     ScriptContentResponse,
     ScriptContentUpdate,
@@ -13,15 +18,18 @@ from app.schemas.script import (
     ScriptResponse,
     ScriptUpdate,
 )
-from app.services.execution_service import execution_service
-from app.services.scheduler_service import scheduler_service
-from app.services.script_service import script_service
+from app.services.execution_service import ExecutionService
+from app.services.scheduler_service import SchedulerService
+from app.services.script_service import ScriptService
 
 router = APIRouter(prefix="/api/scripts", tags=["scripts"])
 
 
 @router.get("", response_model=list[ScriptListResponse])
-async def list_scripts(db: AsyncSession = Depends(get_db_session)):
+async def list_scripts(
+    db: AsyncSession = Depends(get_db_session),
+    script_service: ScriptService = Depends(get_script_service),
+):
     return await script_service.get_scripts(db)
 
 
@@ -29,6 +37,7 @@ async def list_scripts(db: AsyncSession = Depends(get_db_session)):
 async def create_script(
     script_data: ScriptCreate,
     db: AsyncSession = Depends(get_db_session),
+    script_service: ScriptService = Depends(get_script_service),
 ):
     script = await script_service.create_script(db, script_data)
     return script
@@ -38,6 +47,7 @@ async def create_script(
 async def get_script(
     script_id: uuid.UUID,
     db: AsyncSession = Depends(get_db_session),
+    script_service: ScriptService = Depends(get_script_service),
 ):
     return await script_service.get_script(db, script_id)
 
@@ -47,6 +57,7 @@ async def update_script(
     script_id: uuid.UUID,
     script_data: ScriptUpdate,
     db: AsyncSession = Depends(get_db_session),
+    script_service: ScriptService = Depends(get_script_service),
 ):
     return await script_service.update_script(db, script_id, script_data)
 
@@ -55,6 +66,7 @@ async def update_script(
 async def delete_script(
     script_id: uuid.UUID,
     db: AsyncSession = Depends(get_db_session),
+    script_service: ScriptService = Depends(get_script_service),
 ):
     await script_service.delete_script(db, script_id)
 
@@ -63,6 +75,7 @@ async def delete_script(
 async def get_script_content(
     script_id: uuid.UUID,
     db: AsyncSession = Depends(get_db_session),
+    script_service: ScriptService = Depends(get_script_service),
 ):
     return await script_service.get_script_content(db, script_id)
 
@@ -72,6 +85,7 @@ async def update_script_content(
     script_id: uuid.UUID,
     content_data: ScriptContentUpdate,
     db: AsyncSession = Depends(get_db_session),
+    script_service: ScriptService = Depends(get_script_service),
 ):
     return await script_service.update_script_content(db, script_id, content_data.content)
 
@@ -83,6 +97,7 @@ async def import_script(
     description: str = Form(None),
     cron_expression: str = Form(None),
     db: AsyncSession = Depends(get_db_session),
+    script_service: ScriptService = Depends(get_script_service),
 ):
     return await script_service.import_script(
         db=db,
@@ -97,6 +112,8 @@ async def import_script(
 async def activate_script(
     script_id: uuid.UUID,
     db: AsyncSession = Depends(get_db_session),
+    script_service: ScriptService = Depends(get_script_service),
+    scheduler_service: SchedulerService = Depends(get_scheduler_service),
 ):
     script = await script_service.get_script(db, script_id)
     await scheduler_service.activate_script(db, script, async_session_factory)
@@ -107,6 +124,8 @@ async def activate_script(
 async def deactivate_script(
     script_id: uuid.UUID,
     db: AsyncSession = Depends(get_db_session),
+    script_service: ScriptService = Depends(get_script_service),
+    scheduler_service: SchedulerService = Depends(get_scheduler_service),
 ):
     script = await script_service.get_script(db, script_id)
     await scheduler_service.deactivate_script(db, script)
@@ -117,6 +136,7 @@ async def deactivate_script(
 async def run_script(
     script_id: uuid.UUID,
     db: AsyncSession = Depends(get_db_session),
+    execution_service: ExecutionService = Depends(get_execution_service),
 ):
     execution = await execution_service.run_script(db, script_id, triggered_by="manual")
 

@@ -14,9 +14,9 @@ class Settings(BaseSettings):
     backend_port: int = 8001
     backend_reload: bool = False
 
-    apscheduler_timezone: str = "UTC"
-
     secret_key: str = "your-secret-key-change-this-in-production-min-32-chars"
+
+    scripts_dir: str = "./scripts"
 
     @property
     def database_url(self) -> str:

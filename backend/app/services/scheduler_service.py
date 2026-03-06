@@ -8,14 +8,14 @@ from apscheduler.triggers.cron import CronTrigger
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import settings
 from app.core.database import engine
 from app.models.script import Script
-from app.services.execution_service import execution_service
+from app.services.execution_service import ExecutionService
 
 
 class SchedulerService:
-    def __init__(self):
+    def __init__(self, execution_service: ExecutionService):
+        self.execution_service = execution_service
         self.scheduler: Optional[AsyncScheduler] = None
         self._is_started = False
 
@@ -26,7 +26,9 @@ class SchedulerService:
         data_store = SQLAlchemyDataStore(engine, schema="public")
         event_broker = AsyncpgEventBroker.from_async_sqla_engine(engine)
 
-        self.scheduler = AsyncScheduler(data_store, event_broker, timezone=settings.apscheduler_timezone)
+        self.scheduler = AsyncScheduler(data_store, event_broker)
+
+        await self.scheduler.__aenter__()
 
     async def start(self) -> None:
         if not self.scheduler:
@@ -42,6 +44,9 @@ class SchedulerService:
         if self.scheduler and self._is_started:
             await self.scheduler.stop()
             self._is_started = False
+
+        if self.scheduler:
+            await self.scheduler.__aexit__(None, None, None)
 
     async def add_schedule(
         self,
@@ -65,11 +70,7 @@ class SchedulerService:
         async def scheduled_task():
             async for session in db_session_factory():
                 try:
-                    await execution_service.run_script(
-                        db=session,
-                        script_id=script_id,
-                        triggered_by="cron",
-                    )
+                    await self.execution_service.run_script(db=session, script_id=script_id, triggered_by="cron")
                     break
                 except Exception as e:
                     print(f"Error running scheduled script {script_id}: {e}")
@@ -189,6 +190,3 @@ class SchedulerService:
                     print(f"Failed to reactivate script {script.id}: {e}")
 
         return count
-
-
-scheduler_service = SchedulerService()

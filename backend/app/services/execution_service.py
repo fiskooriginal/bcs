@@ -16,7 +16,7 @@ from app.models.script import Script
 
 
 class ExecutionService:
-    def __init__(self, scripts_dir: str = "/app/scripts"):
+    def __init__(self, scripts_dir: str):
         self.scripts_dir = Path(scripts_dir)
         self.active_processes: dict[uuid.UUID, asyncio.subprocess.Process] = {}
 
@@ -46,9 +46,7 @@ class ExecutionService:
 
         return execution
 
-    async def get_execution(
-        self, db: AsyncSession, execution_id: uuid.UUID
-    ) -> ScriptExecution:
+    async def get_execution(self, db: AsyncSession, execution_id: uuid.UUID) -> ScriptExecution:
         stmt = (
             select(ScriptExecution)
             .where(ScriptExecution.id == execution_id)
@@ -291,6 +289,3 @@ class ExecutionService:
         await self.update_execution_status(db, execution_id, "cancelled", exit_code=-1)
 
         return execution
-
-
-execution_service = ExecutionService()

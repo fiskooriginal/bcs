@@ -5,6 +5,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db_session
+from app.core.dependencies import get_execution_service
 from app.models.execution import ScriptLog
 from app.schemas.execution import (
     ScriptExecutionDetailResponse,
@@ -12,7 +13,7 @@ from app.schemas.execution import (
     ScriptExecutionResponse,
     ScriptLogResponse,
 )
-from app.services.execution_service import execution_service
+from app.services.execution_service import ExecutionService
 
 router = APIRouter(prefix="/api", tags=["executions"])
 
@@ -22,6 +23,7 @@ async def get_script_executions(
     script_id: uuid.UUID,
     limit: int = 50,
     db: AsyncSession = Depends(get_db_session),
+    execution_service: ExecutionService = Depends(get_execution_service),
 ):
     executions = await execution_service.get_script_executions(db, script_id, limit)
 
@@ -51,6 +53,7 @@ async def get_script_executions(
 async def get_execution_details(
     execution_id: uuid.UUID,
     db: AsyncSession = Depends(get_db_session),
+    execution_service: ExecutionService = Depends(get_execution_service),
 ):
     execution = await execution_service.get_execution(db, execution_id)
 
@@ -80,6 +83,7 @@ async def get_execution_details(
 async def get_execution_logs(
     execution_id: uuid.UUID,
     db: AsyncSession = Depends(get_db_session),
+    execution_service: ExecutionService = Depends(get_execution_service),
 ):
     execution = await execution_service.get_execution(db, execution_id)
 
@@ -100,5 +104,6 @@ async def get_execution_logs(
 async def stop_execution(
     execution_id: uuid.UUID,
     db: AsyncSession = Depends(get_db_session),
+    execution_service: ExecutionService = Depends(get_execution_service),
 ):
     return await execution_service.stop_execution(db, execution_id)

@@ -9,18 +9,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.execution import ScriptExecution
 from app.models.script import Script
-from app.schemas.script import (
-    ScriptContentResponse,
-    ScriptCreate,
-    ScriptListResponse,
-    ScriptUpdate,
-)
+from app.schemas.script import ScriptContentResponse, ScriptCreate, ScriptListResponse, ScriptUpdate
 
 
 class ScriptService:
-    def __init__(self, scripts_dir: str = "/app/scripts"):
+    def __init__(self, scripts_dir: str):
         self.scripts_dir = Path(scripts_dir)
-        self.scripts_dir.mkdir(parents=True, exist_ok=True)
 
     def _generate_filename(self, name: str) -> str:
         safe_name = "".join(c if c.isalnum() or c in ("_", "-") else "_" for c in name)
@@ -238,6 +232,3 @@ class ScriptService:
         await db.refresh(db_script)
 
         return db_script
-
-
-script_service = ScriptService()
