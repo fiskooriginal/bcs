@@ -4,11 +4,26 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
+from app.core.database import async_session_factory, get_db
+from app.services.scheduler_service import scheduler_service
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    await scheduler_service.initialize()
+    
+    async for db in get_db():
+        try:
+            await scheduler_service.reactivate_all_active_scripts(db, async_session_factory)
+            break
+        finally:
+            await db.close()
+    
+    await scheduler_service.start()
+    
     yield
+    
+    await scheduler_service.stop()
 
 
 app = FastAPI(
