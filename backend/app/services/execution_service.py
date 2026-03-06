@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.utils import utc_now
+from app.core.websocket import ws_manager
 from app.models.execution import ScriptExecution, ScriptLog
 from app.models.script import Script
 
@@ -191,6 +192,8 @@ class ExecutionService:
                             stream=stream_name,
                             level=level,
                         )
+
+                        await ws_manager.broadcast_log(execution_id, log_entry)
 
                         if log_callback:
                             try:
