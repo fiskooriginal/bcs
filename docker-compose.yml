@@ -34,7 +34,6 @@ services:
       BACKEND_HOST: ${BACKEND_HOST}
       BACKEND_PORT: ${BACKEND_PORT}
       BACKEND_RELOAD: ${BACKEND_RELOAD}
-      APSCHEDULER_TIMEZONE: ${APSCHEDULER_TIMEZONE}
       SECRET_KEY: ${SECRET_KEY}
     ports:
       - "8001:8001"
@@ -60,8 +59,11 @@ services:
       args:
         VITE_API_URL: ${VITE_API_URL}
         VITE_WS_URL: ${VITE_WS_URL}
-    container_name: bcs-frontend
+    container_name: frontend
     restart: unless-stopped
+    environment:
+      VITE_API_URL: ${VITE_API_URL}
+      VITE_WS_URL: ${VITE_WS_URL}
     ports:
       - "3001:3000"
     depends_on:

@@ -53,7 +53,45 @@
   * {
     @apply border-border;
   }
+  
   body {
     @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+  
+  #root {
+    @apply min-h-screen flex flex-col;
+  }
+}
+
+@layer utilities {
+  .animate-in {
+    animation: enter 150ms ease-out;
+  }
+  
+  .animate-out {
+    animation: leave 150ms ease-in forwards;
+  }
+  
+  @keyframes enter {
+    from {
+      opacity: 0;
+      transform: translateY(-4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  
+  @keyframes leave {
+    from {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    to {
+      opacity: 0;
+      transform: translateY(-4px);
+    }
   }
 }
