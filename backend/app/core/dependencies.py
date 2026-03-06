@@ -2,6 +2,7 @@ from pathlib import Path
 from typing import Optional
 
 from app.core.config import settings
+from app.core.database import async_session_factory
 from app.services.execution_service import ExecutionService
 from app.services.scheduler_service import SchedulerService
 from app.services.script_service import ScriptService
@@ -18,7 +19,7 @@ class ServiceContainer:
         scripts_dir.mkdir(parents=True, exist_ok=True)
 
         cls._script_service = ScriptService(settings.scripts_dir)
-        cls._execution_service = ExecutionService(settings.scripts_dir)
+        cls._execution_service = ExecutionService(settings.scripts_dir, async_session_factory)
         cls._scheduler_service = SchedulerService(execution_service=cls._execution_service)
 
     @classmethod

@@ -5,8 +5,6 @@ import { Badge } from './ui/badge';
 import {
   Play,
   Pause,
-  Trash2,
-  Edit,
   FileCode,
   Calendar,
   MoreVertical,
@@ -16,15 +14,15 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from './ui/dropdown-menu';
-import { useActivateScript, useDeactivateScript, useDeleteScript, useRunScript } from '@/hooks/useScripts';
+import { useActivateScript, useDeactivateScript, useRunScript } from '@/hooks/useScripts';
 import { useScriptExecutions } from '@/hooks/useExecutions';
 import type { Script } from '@/types';
-import { formatDistanceToNow } from 'date-fns';
 import cronstrue from 'cronstrue';
 import { ScriptDetailsDialog } from './ScriptDetailsDialog';
+import { ExecutionDialog } from './ExecutionDialog';
+import { formatRelativeTime } from '@/lib/date-utils';
 
 interface ScriptCardProps {
   script: Script;
@@ -32,10 +30,10 @@ interface ScriptCardProps {
 
 export function ScriptCard({ script }: ScriptCardProps) {
   const [showDetails, setShowDetails] = useState(false);
+  const [executionId, setExecutionId] = useState<string | null>(null);
 
   const activateMutation = useActivateScript();
   const deactivateMutation = useDeactivateScript();
-  const deleteMutation = useDeleteScript();
   const runMutation = useRunScript();
   const { data: executions } = useScriptExecutions(script.id);
 
@@ -48,13 +46,14 @@ export function ScriptCard({ script }: ScriptCardProps) {
   };
 
   const handleRun = async () => {
-    await runMutation.mutateAsync(script.id);
+    const result = await runMutation.mutateAsync(script.id);
+    setExecutionId(result.execution_id);
+    setShowDetails(false);
   };
 
-  const handleDelete = async () => {
-    if (confirm(`Are you sure you want to delete "${script.name}"?`)) {
-      await deleteMutation.mutateAsync(script.id);
-    }
+  const handleOpenExecution = (execId: string) => {
+    setExecutionId(execId);
+    setShowDetails(false);
   };
 
   const cronDescription = script.cron_expression
@@ -69,17 +68,37 @@ export function ScriptCard({ script }: ScriptCardProps) {
 
   const lastExecution = executions?.[0];
 
+  const handleCardClick = (e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    if (
+      target.closest('button') ||
+      target.closest('[role="menuitem"]') ||
+      target.closest('[role="menu"]')
+    ) {
+      return;
+    }
+    setShowDetails(true);
+  };
+
   return (
     <>
-      <Card className="hover:shadow-xl transition-all duration-300 hover:-translate-y-1 group border-l-4 border-l-transparent hover:border-l-primary">
+      <Card 
+        className="hover:shadow-xl transition-all duration-300 hover:-translate-y-1 group border-l-4 border-l-transparent hover:border-l-primary cursor-pointer"
+        onClick={handleCardClick}
+      >
         <CardHeader>
           <div className="flex items-start justify-between">
-            <div className="flex-1">
+            <div className="flex-1 min-w-0">
               <CardTitle className="flex items-center gap-2 group-hover:text-primary transition-colors">
                 <FileCode className="h-5 w-5 text-primary flex-shrink-0" />
-                <span className="truncate">{script.name}</span>
+                <div className="flex flex-col min-w-0 flex-1">
+                  <span className="truncate">{script.name}</span>
+                  <span className="text-xs font-mono font-normal text-muted-foreground truncate">
+                    {script.filename}
+                  </span>
+                </div>
               </CardTitle>
-              <CardDescription className="mt-1 line-clamp-2">
+              <CardDescription className="mt-2 line-clamp-2">
                 {script.description || 'No description provided'}
               </CardDescription>
             </div>
@@ -90,22 +109,9 @@ export function ScriptCard({ script }: ScriptCardProps) {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => setShowDetails(true)}>
-                  <Edit className="mr-2 h-4 w-4" />
-                  Edit
-                </DropdownMenuItem>
                 <DropdownMenuItem onClick={handleRun} disabled={runMutation.isPending}>
                   <Play className="mr-2 h-4 w-4" />
                   Run Now
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onClick={handleDelete}
-                  disabled={deleteMutation.isPending}
-                  className="text-destructive"
-                >
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  Delete
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -119,9 +125,9 @@ export function ScriptCard({ script }: ScriptCardProps) {
           </div>
 
           {lastExecution && (
-            <div className="flex items-center gap-2 text-sm flex-wrap">
+            <div className="flex items-center gap-2 text-sm bg-muted/30 p-2 rounded border border-border/40 flex-wrap">
               <Clock className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-              <span className="text-muted-foreground">Last run:</span>
+              <span className="text-muted-foreground font-medium">Last run:</span>
               <Badge
                 variant={
                   lastExecution.status === 'completed'
@@ -130,24 +136,29 @@ export function ScriptCard({ script }: ScriptCardProps) {
                     ? 'destructive'
                     : 'secondary'
                 }
+                className={
+                  lastExecution.status === 'completed'
+                    ? 'bg-green-500 hover:bg-green-600 text-white border-green-600'
+                    : ''
+                }
               >
                 {lastExecution.status}
               </Badge>
               <span className="text-xs text-muted-foreground">
-                {formatDistanceToNow(new Date(lastExecution.started_at), { addSuffix: true })}
+                {formatRelativeTime(lastExecution.started_at)}
               </span>
             </div>
           )}
 
           <div className="flex items-center gap-2 pt-2 border-t">
-            <Badge 
+            <Badge
               variant={script.is_active ? 'default' : 'secondary'}
               className="font-medium"
             >
               {script.is_active ? '● Active' : '○ Inactive'}
             </Badge>
             <span className="text-xs text-muted-foreground">
-              Updated {formatDistanceToNow(new Date(script.updated_at), { addSuffix: true })}
+              Updated {formatRelativeTime(script.updated_at)}
             </span>
           </div>
         </CardContent>
@@ -192,8 +203,16 @@ export function ScriptCard({ script }: ScriptCardProps) {
       <ScriptDetailsDialog
         scriptId={showDetails ? script.id : null}
         onOpenChange={(open) => setShowDetails(open)}
-        onDelete={handleDelete}
         onRun={handleRun}
+        onExecutionOpen={handleOpenExecution}
+      />
+
+      <ExecutionDialog
+        executionId={executionId}
+        scriptId={script.id}
+        onOpenChange={(open) => {
+          if (!open) setExecutionId(null);
+        }}
       />
     </>
   );

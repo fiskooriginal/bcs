@@ -1,61 +1,73 @@
+import ast
 import uuid
 from pathlib import Path
 from typing import Optional
 
 import aiofiles
-from fastapi import HTTPException, UploadFile
+from fastapi import HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.execution import ScriptExecution
 from app.models.script import Script
-from app.schemas.script import ScriptContentResponse, ScriptCreate, ScriptListResponse, ScriptUpdate
+from app.schemas.script import ScriptContentResponse, ScriptListResponse, ScriptUpdate
 
 
 class ScriptService:
     def __init__(self, scripts_dir: str):
         self.scripts_dir = Path(scripts_dir)
 
-    def _generate_filename(self, name: str) -> str:
-        safe_name = "".join(c if c.isalnum() or c in ("_", "-") else "_" for c in name)
-        timestamp = uuid.uuid4().hex[:8]
-        return f"{safe_name}_{timestamp}.py"
-
     def _get_script_path(self, filename: str) -> Path:
         return self.scripts_dir / filename
 
-    async def create_script(
-        self,
-        db: AsyncSession,
-        script_data: ScriptCreate,
-    ) -> Script:
-        stmt = select(Script).where(Script.name == script_data.name)
-        result = await db.execute(stmt)
-        if result.scalar_one_or_none():
-            raise HTTPException(status_code=400, detail=f"Script with name '{script_data.name}' already exists")
+    def _prettify_name(self, filename: str) -> str:
+        stem = Path(filename).stem
+        return stem.replace("_", " ").replace("-", " ").title()
 
-        filename = self._generate_filename(script_data.name)
+    async def _extract_docstring(self, filename: str) -> Optional[str]:
         file_path = self._get_script_path(filename)
-
         try:
-            async with aiofiles.open(file_path, "w", encoding="utf-8") as f:
-                await f.write(script_data.content)
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Failed to write script file: {str(e)}")
+            async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
+                content = await f.read()
+            tree = ast.parse(content)
+            return ast.get_docstring(tree)
+        except Exception:
+            return None
 
-        db_script = Script(
-            name=script_data.name,
-            filename=filename,
-            description=script_data.description,
-            cron_expression=script_data.cron_expression,
-            is_active=False,
-        )
+    async def sync_scripts(self, db: AsyncSession) -> dict:
+        # Discover all .py files on disk
+        disk_files = {f.name for f in self.scripts_dir.glob("*.py") if not f.name.startswith("__")}
 
-        db.add(db_script)
+        stmt = select(Script)
+        result = await db.execute(stmt)
+        db_scripts = result.scalars().all()
+        db_by_filename = {s.filename: s for s in db_scripts}
+
+        deleted = 0
+        for filename, script in db_by_filename.items():
+            if filename not in disk_files:
+                await db.delete(script)
+                deleted += 1
+
+        await db.flush()
+
+        created = 0
+        for filename in disk_files:
+            if filename not in db_by_filename:
+                name = self._prettify_name(filename)
+                description = await self._extract_docstring(filename)
+                db_script = Script(
+                    name=name,
+                    filename=filename,
+                    description=description,
+                    cron_expression=None,
+                    is_active=False,
+                )
+                db.add(db_script)
+                created += 1
+
         await db.commit()
-        await db.refresh(db_script)
-
-        return db_script
+        return {"created": created, "deleted": deleted}
 
     async def get_script(self, db: AsyncSession, script_id: uuid.UUID) -> Script:
         stmt = select(Script).where(Script.id == script_id)
@@ -119,39 +131,14 @@ class ScriptService:
     ) -> Script:
         script = await self.get_script(db, script_id)
 
-        if script_data.name is not None and script_data.name != script.name:
-            stmt = select(Script).where(Script.name == script_data.name, Script.id != script_id)
-            result = await db.execute(stmt)
-            if result.scalar_one_or_none():
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Script with name '{script_data.name}' already exists",
-                )
-            script.name = script_data.name
-
-        if script_data.description is not None:
-            script.description = script_data.description
-
-        if script_data.cron_expression is not None:
+        # Use model_fields_set to distinguish "not sent" from "explicitly null"
+        if "cron_expression" in script_data.model_fields_set:
             script.cron_expression = script_data.cron_expression
 
         await db.commit()
         await db.refresh(script)
 
         return script
-
-    async def delete_script(self, db: AsyncSession, script_id: uuid.UUID) -> None:
-        script = await self.get_script(db, script_id)
-
-        file_path = self._get_script_path(script.filename)
-        try:
-            if file_path.exists():
-                file_path.unlink()
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Failed to delete script file: {str(e)}")
-
-        await db.delete(script)
-        await db.commit()
 
     async def get_script_content(self, db: AsyncSession, script_id: uuid.UUID) -> ScriptContentResponse:
         script = await self.get_script(db, script_id)
@@ -167,68 +154,3 @@ class ScriptService:
             raise HTTPException(status_code=500, detail=f"Failed to read script file: {str(e)}")
 
         return ScriptContentResponse(content=content)
-
-    async def update_script_content(
-        self,
-        db: AsyncSession,
-        script_id: uuid.UUID,
-        content: str,
-    ) -> Script:
-        script = await self.get_script(db, script_id)
-        file_path = self._get_script_path(script.filename)
-
-        try:
-            async with aiofiles.open(file_path, "w", encoding="utf-8") as f:
-                await f.write(content)
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Failed to update script file: {str(e)}")
-
-        await db.commit()
-        await db.refresh(script)
-
-        return script
-
-    async def import_script(
-        self,
-        db: AsyncSession,
-        file: UploadFile,
-        name: str,
-        description: Optional[str] = None,
-        cron_expression: Optional[str] = None,
-    ) -> Script:
-        if not file.filename or not file.filename.endswith(".py"):
-            raise HTTPException(status_code=400, detail="Only .py files are allowed")
-
-        stmt = select(Script).where(Script.name == name)
-        result = await db.execute(stmt)
-        if result.scalar_one_or_none():
-            raise HTTPException(status_code=400, detail=f"Script with name '{name}' already exists")
-
-        content = await file.read()
-        try:
-            content_str = content.decode("utf-8")
-        except UnicodeDecodeError:
-            raise HTTPException(status_code=400, detail="File must be UTF-8 encoded")
-
-        filename = self._generate_filename(name)
-        file_path = self._get_script_path(filename)
-
-        try:
-            async with aiofiles.open(file_path, "w", encoding="utf-8") as f:
-                await f.write(content_str)
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Failed to write script file: {str(e)}")
-
-        db_script = Script(
-            name=name,
-            filename=filename,
-            description=description,
-            cron_expression=cron_expression,
-            is_active=False,
-        )
-
-        db.add(db_script)
-        await db.commit()
-        await db.refresh(db_script)
-
-        return db_script

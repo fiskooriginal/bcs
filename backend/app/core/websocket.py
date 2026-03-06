@@ -38,11 +38,34 @@ class WebSocketManager:
             "timestamp": log.timestamp.isoformat(),
         }
 
+        message = {"type": "log", "data": log_data}
+
         disconnected = set()
 
         for connection in self.active_connections[execution_id]:
             try:
-                await connection.send_json(log_data)
+                await connection.send_json(message)
+            except Exception:
+                disconnected.add(connection)
+
+        for connection in disconnected:
+            self.disconnect(connection, execution_id)
+
+    async def broadcast_status(self, execution_id: uuid.UUID, status: str, exit_code: int | None = None):
+        if execution_id not in self.active_connections:
+            return
+
+        status_data = {"status": status}
+        if exit_code is not None:
+            status_data["exit_code"] = exit_code
+
+        message = {"type": "status", "data": status_data}
+
+        disconnected = set()
+
+        for connection in self.active_connections[execution_id]:
+            try:
+                await connection.send_json(message)
             except Exception:
                 disconnected.add(connection)
 

@@ -6,7 +6,7 @@ from typing import Optional
 
 from fastapi import HTTPException
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
 
 from app.core.utils import utc_now
@@ -16,8 +16,9 @@ from app.models.script import Script
 
 
 class ExecutionService:
-    def __init__(self, scripts_dir: str):
+    def __init__(self, scripts_dir: str, session_factory: async_sessionmaker[AsyncSession]):
         self.scripts_dir = Path(scripts_dir)
+        self.session_factory = session_factory
         self.active_processes: dict[uuid.UUID, asyncio.subprocess.Process] = {}
 
     async def create_execution(
@@ -125,7 +126,6 @@ class ExecutionService:
         db: AsyncSession,
         script_id: uuid.UUID,
         triggered_by: str = "manual",
-        log_callback: Optional[callable] = None,
     ) -> ScriptExecution:
         stmt = select(Script).where(Script.id == script_id)
         result = await db.execute(stmt)
@@ -141,116 +141,118 @@ class ExecutionService:
 
         execution = await self.create_execution(db, script_id, triggered_by)
 
-        asyncio.create_task(self._execute_script(db, execution.id, script_path, log_callback))
+        # Background task uses its own session — the request session will be
+        # closed as soon as the response is sent.
+        asyncio.create_task(self._execute_script(execution.id, script_path))
 
         return execution
 
     async def _execute_script(
         self,
-        db: AsyncSession,
         execution_id: uuid.UUID,
         script_path: Path,
-        log_callback: Optional[callable] = None,
     ) -> None:
-        try:
-            await self.update_execution_status(db, execution_id, "running")
+        async with self.session_factory() as db:
+            try:
+                await self.update_execution_status(db, execution_id, "running")
 
-            await self.add_log(
-                db,
-                execution_id,
-                f"Starting execution of script: {script_path.name}",
-                stream="stdout",
-                level="INFO",
-            )
-
-            process = await asyncio.create_subprocess_exec(
-                sys.executable,
-                str(script_path),
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                cwd=str(self.scripts_dir),
-            )
-
-            self.active_processes[execution_id] = process
-
-            async def read_stream(stream, stream_name: str):
-                while True:
-                    line = await stream.readline()
-                    if not line:
-                        break
-
-                    message = line.decode("utf-8", errors="replace").rstrip()
-
-                    if message:
-                        level = "ERROR" if stream_name == "stderr" else "INFO"
-                        log_entry = await self.add_log(
-                            db,
-                            execution_id,
-                            message,
-                            stream=stream_name,
-                            level=level,
-                        )
-
-                        await ws_manager.broadcast_log(execution_id, log_entry)
-
-                        if log_callback:
-                            try:
-                                await log_callback(log_entry)
-                            except Exception as e:
-                                print(f"Log callback error: {e}")
-
-            await asyncio.gather(
-                read_stream(process.stdout, "stdout"),
-                read_stream(process.stderr, "stderr"),
-            )
-
-            exit_code = await process.wait()
-
-            self.active_processes.pop(execution_id, None)
-
-            if exit_code == 0:
-                status = "completed"
                 await self.add_log(
                     db,
                     execution_id,
-                    f"Script completed successfully with exit code {exit_code}",
+                    f"Starting execution of script: {script_path.name}",
                     stream="stdout",
                     level="INFO",
                 )
-            else:
-                status = "failed"
-                await self.add_log(
+
+                process = await asyncio.create_subprocess_exec(
+                    sys.executable,
+                    script_path.name,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                    cwd=str(self.scripts_dir),
+                )
+
+                self.active_processes[execution_id] = process
+
+                async def read_stream(stream, stream_name: str):
+                    while True:
+                        line = await stream.readline()
+                        if not line:
+                            break
+
+                        message = line.decode("utf-8", errors="replace").rstrip()
+
+                        if message:
+                            level = "ERROR" if stream_name == "stderr" else "INFO"
+                            log_entry = await self.add_log(
+                                db,
+                                execution_id,
+                                message,
+                                stream=stream_name,
+                                level=level,
+                            )
+
+                            await ws_manager.broadcast_log(execution_id, log_entry)
+
+                await asyncio.gather(
+                    read_stream(process.stdout, "stdout"),
+                    read_stream(process.stderr, "stderr"),
+                )
+
+                exit_code = await process.wait()
+
+                self.active_processes.pop(execution_id, None)
+
+                if exit_code == 0:
+                    status = "completed"
+                    log_entry = await self.add_log(
+                        db,
+                        execution_id,
+                        f"Script completed successfully with exit code {exit_code}",
+                        stream="stdout",
+                        level="INFO",
+                    )
+                    await ws_manager.broadcast_log(execution_id, log_entry)
+                else:
+                    status = "failed"
+                    log_entry = await self.add_log(
+                        db,
+                        execution_id,
+                        f"Script failed with exit code {exit_code}",
+                        stream="stderr",
+                        level="ERROR",
+                    )
+                    await ws_manager.broadcast_log(execution_id, log_entry)
+
+                await self.update_execution_status(db, execution_id, status, exit_code)
+                await ws_manager.broadcast_status(execution_id, status, exit_code)
+
+            except asyncio.CancelledError:
+                log_entry = await self.add_log(
                     db,
                     execution_id,
-                    f"Script failed with exit code {exit_code}",
+                    "Execution was cancelled",
                     stream="stderr",
                     level="ERROR",
                 )
+                await ws_manager.broadcast_log(execution_id, log_entry)
+                await self.update_execution_status(db, execution_id, "cancelled", exit_code=-1)
+                await ws_manager.broadcast_status(execution_id, "cancelled", -1)
+                self.active_processes.pop(execution_id, None)
+                raise
 
-            await self.update_execution_status(db, execution_id, status, exit_code)
-
-        except asyncio.CancelledError:
-            await self.add_log(
-                db,
-                execution_id,
-                "Execution was cancelled",
-                stream="stderr",
-                level="ERROR",
-            )
-            await self.update_execution_status(db, execution_id, "cancelled", exit_code=-1)
-            self.active_processes.pop(execution_id, None)
-            raise
-
-        except Exception as e:
-            await self.add_log(
-                db,
-                execution_id,
-                f"Execution error: {str(e)}",
-                stream="stderr",
-                level="ERROR",
-            )
-            await self.update_execution_status(db, execution_id, "failed", exit_code=-1)
-            self.active_processes.pop(execution_id, None)
+            except Exception as e:
+                log_entry = await self.add_log(
+                    db,
+                    execution_id,
+                    f"Execution error: {str(e)}",
+                    stream="stderr",
+                    level="ERROR",
+                )
+                await ws_manager.broadcast_log(execution_id, log_entry)
+                await self.update_execution_status(db, execution_id, "failed", exit_code=-1)
+                await ws_manager.broadcast_status(execution_id, "failed", -1)
+                self.active_processes.pop(execution_id, None)
 
     async def stop_execution(self, db: AsyncSession, execution_id: uuid.UUID) -> ScriptExecution:
         execution = await self.get_execution(db, execution_id)

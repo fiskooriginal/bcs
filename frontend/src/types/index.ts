@@ -9,17 +9,8 @@ export interface Script {
   updated_at: string;
 }
 
-export interface ScriptCreate {
-  name: string;
-  content: string;
-  description?: string;
-  cron_expression?: string;
-}
-
 export interface ScriptUpdate {
-  name?: string;
-  description?: string;
-  cron_expression?: string;
+  cron_expression?: string | null;
 }
 
 export interface ScriptExecution {

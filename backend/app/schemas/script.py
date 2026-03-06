@@ -2,44 +2,11 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, Field, field_validator
-
-
-class ScriptBase(BaseModel):
-    name: str = Field(..., min_length=1, max_length=255, description="Script name")
-    description: Optional[str] = Field(None, description="Script description")
-    cron_expression: Optional[str] = Field(None, description="Cron expression for scheduling")
-
-
-class ScriptCreate(ScriptBase):
-    content: str = Field(..., min_length=1, description="Python script content")
-
-    @field_validator("name")
-    @classmethod
-    def validate_name(cls, v: str) -> str:
-        if not v.strip():
-            raise ValueError("Name cannot be empty or whitespace only")
-        return v.strip()
-
-    @field_validator("cron_expression")
-    @classmethod
-    def validate_cron(cls, v: Optional[str]) -> Optional[str]:
-        if v is not None and v.strip():
-            return v.strip()
-        return None
+from pydantic import BaseModel, field_serializer, field_validator
 
 
 class ScriptUpdate(BaseModel):
-    name: Optional[str] = Field(None, min_length=1, max_length=255)
-    description: Optional[str] = None
     cron_expression: Optional[str] = None
-
-    @field_validator("name")
-    @classmethod
-    def validate_name(cls, v: Optional[str]) -> Optional[str]:
-        if v is not None and not v.strip():
-            raise ValueError("Name cannot be empty or whitespace only")
-        return v.strip() if v else None
 
     @field_validator("cron_expression")
     @classmethod
@@ -49,18 +16,22 @@ class ScriptUpdate(BaseModel):
         return None
 
 
-class ScriptContentUpdate(BaseModel):
-    content: str = Field(..., min_length=1, description="Updated Python script content")
-
-
-class ScriptResponse(ScriptBase):
+class ScriptResponse(BaseModel):
     id: uuid.UUID
+    name: str
+    description: Optional[str] = None
     filename: str
+    cron_expression: Optional[str] = None
     is_active: bool
     created_at: datetime
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+    @field_serializer("created_at", "updated_at")
+    def serialize_datetime(self, dt: datetime) -> str:
+        """Сериализует naive datetime как UTC ISO 8601 с Z суффиксом"""
+        return dt.isoformat() + "Z"
 
 
 class ScriptListResponse(BaseModel):
@@ -77,12 +48,13 @@ class ScriptListResponse(BaseModel):
 
     model_config = {"from_attributes": True}
 
+    @field_serializer("created_at", "updated_at", "last_execution_time")
+    def serialize_datetime(self, dt: Optional[datetime]) -> Optional[str]:
+        """Сериализует naive datetime как UTC ISO 8601 с Z суффиксом"""
+        if dt is None:
+            return None
+        return dt.isoformat() + "Z"
+
 
 class ScriptContentResponse(BaseModel):
     content: str
-
-
-class ScriptImportRequest(BaseModel):
-    name: str = Field(..., min_length=1, max_length=255)
-    description: Optional[str] = None
-    cron_expression: Optional[str] = None

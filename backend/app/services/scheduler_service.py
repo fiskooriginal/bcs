@@ -8,9 +8,27 @@ from apscheduler.triggers.cron import CronTrigger
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.database import engine
+from app.core.database import async_session_factory, engine
 from app.models.script import Script
 from app.services.execution_service import ExecutionService
+
+
+async def execute_scheduled_script(script_id: str | uuid.UUID) -> None:
+    """Module-level callable for APScheduler — must be importable by ref."""
+    from app.core.dependencies import ServiceContainer
+
+    execution_service = ServiceContainer.get_execution_service()
+
+    if isinstance(script_id, uuid.UUID):
+        script_uuid = script_id
+    else:
+        script_uuid = uuid.UUID(script_id)
+
+    async with async_session_factory() as session:
+        try:
+            await execution_service.run_script(db=session, script_id=script_uuid, triggered_by="cron")
+        except Exception as e:
+            print(f"Error running scheduled script {script_id}: {e}")
 
 
 class SchedulerService:
@@ -52,7 +70,6 @@ class SchedulerService:
         self,
         script_id: uuid.UUID,
         cron_expression: str,
-        db_session_factory,
     ) -> str:
         if not self.scheduler:
             raise RuntimeError("Scheduler not initialized")
@@ -67,21 +84,12 @@ class SchedulerService:
 
         schedule_id = f"script_{script_id}"
 
-        async def scheduled_task():
-            async for session in db_session_factory():
-                try:
-                    await self.execution_service.run_script(db=session, script_id=script_id, triggered_by="cron")
-                    break
-                except Exception as e:
-                    print(f"Error running scheduled script {script_id}: {e}")
-                finally:
-                    await session.close()
-
         await self.scheduler.add_schedule(
-            scheduled_task,
+            execute_scheduled_script,
             trigger,
             id=schedule_id,
             conflict_policy=ConflictPolicy.replace,
+            kwargs={"script_id": str(script_id)},
         )
 
         return schedule_id
@@ -142,7 +150,6 @@ class SchedulerService:
         self,
         db: AsyncSession,
         script: Script,
-        db_session_factory,
     ) -> None:
         if not script.cron_expression:
             raise HTTPException(
@@ -153,7 +160,7 @@ class SchedulerService:
         if script.is_active:
             return
 
-        await self.add_schedule(script.id, script.cron_expression, db_session_factory)
+        await self.add_schedule(script.id, script.cron_expression)
 
         script.is_active = True
         await db.commit()
@@ -169,11 +176,7 @@ class SchedulerService:
         await db.commit()
         await db.refresh(script)
 
-    async def reactivate_all_active_scripts(
-        self,
-        db: AsyncSession,
-        db_session_factory,
-    ) -> int:
+    async def reactivate_all_active_scripts(self, db: AsyncSession) -> int:
         from sqlalchemy import select
 
         stmt = select(Script).where(Script.is_active)
@@ -184,7 +187,7 @@ class SchedulerService:
         for script in active_scripts:
             if script.cron_expression:
                 try:
-                    await self.add_schedule(script.id, script.cron_expression, db_session_factory)
+                    await self.add_schedule(script.id, script.cron_expression)
                     count += 1
                 except Exception as e:
                     print(f"Failed to reactivate script {script.id}: {e}")

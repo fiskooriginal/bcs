@@ -8,6 +8,7 @@ import { useWebSocket } from '@/hooks/useWebSocket';
 import type { ScriptLog } from '@/types';
 import { Loader2, Search, Download, RefreshCw } from 'lucide-react';
 import { format } from 'date-fns';
+import { parseDate } from '@/lib/date-utils';
 
 interface LogViewerProps {
   executionId: string;
@@ -42,7 +43,7 @@ export function LogViewer({ executionId, realTime = false }: LogViewerProps) {
     const logText = logs
       .map(
         (log) =>
-          `[${format(new Date(log.timestamp), 'yyyy-MM-dd HH:mm:ss')}] [${log.level.toUpperCase()}] ${log.message}`
+          `[${format(parseDate(log.timestamp), 'yyyy-MM-dd HH:mm:ss')}] [${log.level.toUpperCase()}] ${log.message}`
       )
       .join('\n');
 
@@ -162,7 +163,7 @@ export function LogViewer({ executionId, realTime = false }: LogViewerProps) {
               {filteredLogs.map((log) => (
                 <div key={log.id} className="flex gap-3 hover:bg-gray-900/50 px-2 py-1 rounded">
                   <span className="text-gray-500 text-xs whitespace-nowrap flex-shrink-0 w-[140px]">
-                    {format(new Date(log.timestamp), 'HH:mm:ss.SSS')}
+                    {format(parseDate(log.timestamp), 'HH:mm:ss.SSS')}
                   </span>
                   <span className={`flex-shrink-0 ${getLogColor(log)}`}>
                     {getLogIcon(log)}

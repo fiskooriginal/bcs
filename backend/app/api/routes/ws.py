@@ -33,7 +33,14 @@ async def websocket_logs(websocket: WebSocket, execution_id: uuid.UUID):
                         "stream": log.stream,
                         "timestamp": log.timestamp.isoformat(),
                     }
-                    await websocket.send_json(log_data)
+                    message = {"type": "log", "data": log_data}
+                    await websocket.send_json(message)
+
+                status_data = {"status": execution.status}
+                if execution.exit_code is not None:
+                    status_data["exit_code"] = execution.exit_code
+                status_message = {"type": "status", "data": status_data}
+                await websocket.send_json(status_message)
 
                 while True:
                     await websocket.receive_text()

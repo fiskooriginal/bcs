@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_serializer
 
 
 class ScriptLogBase(BaseModel):
@@ -21,6 +21,11 @@ class ScriptLogResponse(ScriptLogBase):
     timestamp: datetime
 
     model_config = {"from_attributes": True}
+
+    @field_serializer("timestamp")
+    def serialize_datetime(self, dt: datetime) -> str:
+        """Сериализует naive datetime как UTC ISO 8601 с Z суффиксом"""
+        return dt.isoformat() + "Z"
 
 
 class ScriptExecutionBase(BaseModel):
@@ -50,6 +55,13 @@ class ScriptExecutionResponse(ScriptExecutionBase):
 
     model_config = {"from_attributes": True}
 
+    @field_serializer("started_at", "finished_at")
+    def serialize_datetime(self, dt: Optional[datetime]) -> Optional[str]:
+        """Сериализует naive datetime как UTC ISO 8601 с Z суффиксом"""
+        if dt is None:
+            return None
+        return dt.isoformat() + "Z"
+
 
 class ScriptExecutionDetailResponse(ScriptExecutionResponse):
     logs: list[ScriptLogResponse] = []
@@ -68,3 +80,10 @@ class ScriptExecutionListResponse(BaseModel):
     log_count: int = 0
 
     model_config = {"from_attributes": True}
+
+    @field_serializer("started_at", "finished_at")
+    def serialize_datetime(self, dt: Optional[datetime]) -> Optional[str]:
+        """Сериализует naive datetime как UTC ISO 8601 с Z суффиксом"""
+        if dt is None:
+            return None
+        return dt.isoformat() + "Z"

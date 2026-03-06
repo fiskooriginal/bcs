@@ -1,18 +1,15 @@
-import { useState, useMemo } from 'react';
+import { useMemo } from 'react';
 import { ScriptList } from './components/ScriptList';
-import { CreateScriptDialog } from './components/CreateScriptDialog';
-import { ImportScriptDialog } from './components/ImportScriptDialog';
 import { Button } from './components/ui/button';
 import { Card, CardDescription, CardHeader, CardTitle } from './components/ui/card';
-import { Plus, Upload, FileCode, Calendar, CheckCircle2, XCircle, Clock } from 'lucide-react';
+import { RefreshCw, FileCode, Calendar, CheckCircle2, XCircle, Clock } from 'lucide-react';
 import { TooltipProvider } from './components/ui/tooltip';
 import { useScripts } from './hooks/useScripts';
+import { useSyncScripts } from './hooks/useScripts';
 
 function App() {
-  const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [importDialogOpen, setImportDialogOpen] = useState(false);
-  
   const { data: scripts } = useScripts();
+  const syncMutation = useSyncScripts();
 
   const stats = useMemo(() => {
     if (!scripts) {
@@ -52,20 +49,14 @@ function App() {
                 </div>
               </div>
               <div className="flex gap-2 w-full sm:w-auto">
-                <Button 
-                  onClick={() => setImportDialogOpen(true)} 
+                <Button
+                  onClick={() => syncMutation.mutate()}
                   variant="outline"
+                  disabled={syncMutation.isPending}
                   className="flex-1 sm:flex-none"
                 >
-                  <Upload className="mr-2 h-4 w-4" />
-                  Import
-                </Button>
-                <Button 
-                  onClick={() => setCreateDialogOpen(true)}
-                  className="flex-1 sm:flex-none"
-                >
-                  <Plus className="mr-2 h-4 w-4" />
-                  New Script
+                  <RefreshCw className={`mr-2 h-4 w-4 ${syncMutation.isPending ? 'animate-spin' : ''}`} />
+                  Sync Scripts
                 </Button>
               </div>
             </div>
@@ -142,15 +133,6 @@ function App() {
             </div>
           </div>
         </footer>
-
-        <CreateScriptDialog
-          open={createDialogOpen}
-          onOpenChange={setCreateDialogOpen}
-        />
-        <ImportScriptDialog
-          open={importDialogOpen}
-          onOpenChange={setImportDialogOpen}
-        />
       </div>
     </TooltipProvider>
   );

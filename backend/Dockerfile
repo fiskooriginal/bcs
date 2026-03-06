@@ -21,9 +21,9 @@ COPY alembic.ini .
 COPY alembic ./alembic
 COPY app ./app
 COPY scripts ./scripts
+COPY entrypoint.sh /app/entrypoint.sh
 
-RUN mkdir -p /app/scripts && \
-    chmod 755 /app/scripts
+RUN chmod +x /app/entrypoint.sh
 
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked
@@ -34,5 +34,4 @@ ENV PYTHONPATH=/app
 
 EXPOSE 8001
 
-CMD alembic upgrade head && \
-    uvicorn app.main:app --host 0.0.0.0 --port 8001
+CMD ["/app/entrypoint.sh"]

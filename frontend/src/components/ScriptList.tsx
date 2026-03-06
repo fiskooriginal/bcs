@@ -4,6 +4,7 @@ import { ScriptCard } from './ScriptCard';
 import { Input } from './ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Loader2, Search } from 'lucide-react';
+import { parseDate } from '@/lib/date-utils';
 
 type SortOption = 'name-asc' | 'name-desc' | 'updated-asc' | 'updated-desc' | 'active-first';
 type FilterOption = 'all' | 'active' | 'inactive';
@@ -42,12 +43,12 @@ export function ScriptList() {
         case 'name-desc':
           return b.name.localeCompare(a.name);
         case 'updated-asc':
-          return new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime();
+          return parseDate(a.updated_at).getTime() - parseDate(b.updated_at).getTime();
         case 'updated-desc':
-          return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
+          return parseDate(b.updated_at).getTime() - parseDate(a.updated_at).getTime();
         case 'active-first':
           if (a.is_active === b.is_active) {
-            return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
+            return parseDate(b.updated_at).getTime() - parseDate(a.updated_at).getTime();
           }
           return a.is_active ? -1 : 1;
         default:

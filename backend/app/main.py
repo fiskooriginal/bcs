@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import executions, scripts, ws
-from app.core.database import async_session_factory, get_db
+from app.core.database import get_db
 from app.core.dependencies import ServiceContainer
 
 
@@ -13,11 +13,13 @@ async def lifespan(app: FastAPI):
     ServiceContainer.initialize()
 
     scheduler_service = ServiceContainer.get_scheduler_service()
+    script_service = ServiceContainer.get_script_service()
     await scheduler_service.initialize()
 
     async for db in get_db():
         try:
-            await scheduler_service.reactivate_all_active_scripts(db, async_session_factory)
+            await script_service.sync_scripts(db)
+            await scheduler_service.reactivate_all_active_scripts(db)
             break
         finally:
             await db.close()

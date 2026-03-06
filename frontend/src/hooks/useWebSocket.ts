@@ -8,7 +8,7 @@ const getWebSocketUrl = () => {
   
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   const host = window.location.host;
-  return `${protocol}//${host}/api`;
+  return `${protocol}//${host}`;
 };
 
 interface UseWebSocketReturn {
@@ -36,7 +36,7 @@ export const useWebSocket = (executionId: string | null): UseWebSocketReturn => 
     setError(null);
 
     const wsUrl = getWebSocketUrl();
-    const ws = new WebSocket(`${wsUrl}/ws/logs/${executionId}`);
+    const ws = new WebSocket(`${wsUrl}/api/ws/logs/${executionId}`);
 
     ws.onopen = () => {
       setIsConnected(true);

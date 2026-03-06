@@ -57,8 +57,8 @@ src/
 │   ├── ScriptEditor.tsx
 │   ├── CronEditor.tsx
 │   ├── LogViewer.tsx
-│   ├── CreateScriptDialog.tsx
-│   └── ImportScriptDialog.tsx
+│   ├── ScriptDetailsDialog.tsx
+│   └── ExecutionDialog.tsx
 ├── hooks/           # Пользовательские React-хуки
 │   ├── useScripts.ts
 │   ├── useExecutions.ts
@@ -74,11 +74,11 @@ src/
 
 ## Возможности
 
-- Создание, редактирование и удаление Python-скриптов
-- Импорт существующих .py файлов
+- Просмотр и редактирование Python-скриптов
 - Планирование скриптов с помощью cron-выражений
 - Активация/деактивация запланированных заданий
 - Ручной запуск скриптов
+- Синхронизация скриптов из директории backend/scripts
 - Потоковая передача логов в реальном времени через WebSocket
 - История выполнений с логами
 - Редактор кода Monaco с подсветкой синтаксиса Python

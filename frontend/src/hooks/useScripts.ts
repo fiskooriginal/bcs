@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { scriptsApi } from '@/api/scripts';
-import type { ScriptCreate, ScriptUpdate } from '@/types';
+import type { ScriptUpdate } from '@/types';
 
 export const useScripts = () => {
   return useQuery({
@@ -25,17 +25,6 @@ export const useScriptContent = (id: string) => {
   });
 };
 
-export const useCreateScript = () => {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (data: ScriptCreate) => scriptsApi.create(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['scripts'] });
-    },
-  });
-};
-
 export const useUpdateScript = () => {
   const queryClient = useQueryClient();
 
@@ -45,40 +34,6 @@ export const useUpdateScript = () => {
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['scripts'] });
       queryClient.invalidateQueries({ queryKey: ['scripts', variables.id] });
-    },
-  });
-};
-
-export const useUpdateScriptContent = () => {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: ({ id, content }: { id: string; content: string }) =>
-      scriptsApi.updateContent(id, content),
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['scripts', variables.id, 'content'] });
-    },
-  });
-};
-
-export const useDeleteScript = () => {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (id: string) => scriptsApi.delete(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['scripts'] });
-    },
-  });
-};
-
-export const useImportScript = () => {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (file: File) => scriptsApi.importFile(file),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['scripts'] });
     },
   });
 };
@@ -114,6 +69,17 @@ export const useRunScript = () => {
     mutationFn: (id: string) => scriptsApi.run(id),
     onSuccess: (_, id) => {
       queryClient.invalidateQueries({ queryKey: ['scripts', id, 'executions'] });
+    },
+  });
+};
+
+export const useSyncScripts = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: scriptsApi.sync,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['scripts'] });
     },
   });
 };
