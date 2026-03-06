@@ -19,7 +19,7 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - bcs-network
+      - main-network
 
   backend:
     build:
@@ -47,7 +47,7 @@ services:
       postgres:
         condition: service_healthy
     networks:
-      - bcs-network
+      - main-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
       interval: 30s
@@ -69,7 +69,7 @@ services:
     depends_on:
       - backend
     networks:
-      - bcs-network
+      - main-network
 
 volumes:
   postgres_data:
@@ -78,5 +78,5 @@ volumes:
     driver: local
 
 networks:
-  bcs-network:
+  main-network:
     driver: bridge
