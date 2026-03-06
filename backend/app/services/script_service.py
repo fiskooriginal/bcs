@@ -23,6 +23,16 @@ class ScriptService:
         stem = Path(filename).stem
         return stem.replace("_", " ").replace("-", " ").title()
 
+    def _discover_scripts(self) -> set[str]:
+        """Рекурсивно обходит scripts_dir и возвращает относительные пути .py файлов (без __)."""
+        result = set()
+        for path in self.scripts_dir.rglob("*.py"):
+            if path.name.startswith("__"):
+                continue
+            rel = path.relative_to(self.scripts_dir)
+            result.add(str(rel).replace("\\", "/"))
+        return result
+
     async def _extract_docstring(self, filename: str) -> str | None:
         file_path = self._get_script_path(filename)
         try:
@@ -34,8 +44,7 @@ class ScriptService:
             return None
 
     async def sync_scripts(self, db: AsyncSession) -> dict:
-        # Discover all .py files on disk
-        disk_files = {f.name for f in self.scripts_dir.glob("*.py") if not f.name.startswith("__")}
+        disk_files = self._discover_scripts()
 
         stmt = select(Script)
         result = await db.execute(stmt)
@@ -130,7 +139,12 @@ class ScriptService:
     ) -> Script:
         script = await self.get_script(db, script_id)
 
-        # Use model_fields_set to distinguish "not sent" from "explicitly null"
+        if "name" in script_data.model_fields_set and script_data.name is not None:
+            script.name = script_data.name
+
+        if "description" in script_data.model_fields_set:
+            script.description = script_data.description
+
         if "cron_expression" in script_data.model_fields_set:
             script.cron_expression = script_data.cron_expression
 

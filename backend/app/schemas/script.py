@@ -5,7 +5,25 @@ from pydantic import BaseModel, field_serializer, field_validator
 
 
 class ScriptUpdate(BaseModel):
+    name: str | None = None
+    description: str | None = None
     cron_expression: str | None = None
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v: str | None) -> str | None:
+        if v is not None:
+            stripped = v.strip()
+            return stripped if stripped else None
+        return None
+
+    @field_validator("description")
+    @classmethod
+    def validate_description(cls, v: str | None) -> str | None:
+        if v is not None:
+            stripped = v.strip()
+            return stripped if stripped else None
+        return None
 
     @field_validator("cron_expression")
     @classmethod

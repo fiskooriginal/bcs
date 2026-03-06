@@ -19,6 +19,7 @@ class ExecutionService:
         self.scripts_dir = Path(scripts_dir)
         self.session_factory = session_factory
         self.active_processes: dict[uuid.UUID, asyncio.subprocess.Process] = {}
+        self.active_tasks: dict[uuid.UUID, asyncio.Task] = {}
 
     async def create_execution(
         self,
@@ -142,7 +143,8 @@ class ExecutionService:
             script_id=script_id, execution_id=execution.id, event="created", status=execution.status
         )
 
-        asyncio.create_task(self._execute_script(execution.id, script_id, script_path))
+        task = asyncio.create_task(self._execute_script(execution.id, script_id, script_path))
+        self.active_tasks[execution.id] = task
 
         return execution
 
@@ -152,106 +154,127 @@ class ExecutionService:
         script_id: uuid.UUID,
         script_path: Path,
     ) -> None:
-        async with self.session_factory() as db:
-            try:
-                await self.update_execution_status(db, execution_id, "running")
+        try:
+            async with self.session_factory() as db:
+                try:
+                    await self.update_execution_status(db, execution_id, "running")
 
-                await ws_manager.broadcast_execution_update(
-                    script_id=script_id, execution_id=execution_id, event="status", status="running"
-                )
+                    await ws_manager.broadcast_execution_update(
+                        script_id=script_id, execution_id=execution_id, event="status", status="running"
+                    )
 
-                await self.add_log(
-                    db, execution_id, f"Starting execution of script: {script_path.name}", stream="stdout", level="INFO"
-                )
+                    resolved_script = script_path.resolve()
+                    rel_path = resolved_script.relative_to(self.scripts_dir.resolve())
+                    await self.add_log(
+                        db, execution_id, f"Starting execution of script: {rel_path}", stream="stdout", level="INFO"
+                    )
 
-                process = await asyncio.create_subprocess_exec(
-                    sys.executable,
-                    script_path.name,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                    cwd=str(self.scripts_dir),
-                )
+                    script_cwd = script_path.parent.resolve()
+                    process = await asyncio.create_subprocess_exec(
+                        sys.executable,
+                        str(script_path.resolve()),
+                        stdout=asyncio.subprocess.PIPE,
+                        stderr=asyncio.subprocess.PIPE,
+                        cwd=str(script_cwd),
+                    )
 
-                self.active_processes[execution_id] = process
+                    self.active_processes[execution_id] = process
 
-                async def read_stream(stream, stream_name: str):
-                    while True:
-                        line = await stream.readline()
-                        if not line:
-                            break
+                    async def read_stream(stream, stream_name: str):
+                        while True:
+                            line = await stream.readline()
+                            if not line:
+                                break
 
-                        message = line.decode("utf-8", errors="replace").rstrip()
+                            message = line.decode("utf-8", errors="replace").rstrip()
 
-                        if message:
-                            level = "ERROR" if stream_name == "stderr" else "INFO"
-                            log_entry = await self.add_log(db, execution_id, message, stream=stream_name, level=level)
+                            if message:
+                                level = "ERROR" if stream_name == "stderr" else "INFO"
+                                log_entry = await self.add_log(
+                                    db, execution_id, message, stream=stream_name, level=level
+                                )
 
-                            await ws_manager.broadcast_log(execution_id, log_entry)
+                                await ws_manager.broadcast_log(execution_id, log_entry)
 
-                await asyncio.gather(
-                    read_stream(process.stdout, "stdout"),
-                    read_stream(process.stderr, "stderr"),
-                )
+                    await asyncio.gather(
+                        read_stream(process.stdout, "stdout"),
+                        read_stream(process.stderr, "stderr"),
+                    )
 
-                exit_code = await process.wait()
+                    exit_code = await process.wait()
 
-                self.active_processes.pop(execution_id, None)
+                    self.active_processes.pop(execution_id, None)
 
-                if exit_code == 0:
-                    status = "completed"
+                    execution = await self.get_execution(db, execution_id)
+                    if execution.status == "cancelled":
+                        return
+
+                    if exit_code == 0:
+                        status = "completed"
+                        log_entry = await self.add_log(
+                            db,
+                            execution_id,
+                            f"Script completed successfully with exit code {exit_code}",
+                            stream="stdout",
+                            level="INFO",
+                        )
+                        await ws_manager.broadcast_log(execution_id, log_entry)
+                    else:
+                        status = "failed"
+                        log_entry = await self.add_log(
+                            db,
+                            execution_id,
+                            f"Script failed with exit code {exit_code}",
+                            stream="stderr",
+                            level="ERROR",
+                        )
+                        await ws_manager.broadcast_log(execution_id, log_entry)
+
+                    await self.update_execution_status(db, execution_id, status, exit_code)
+                    await ws_manager.broadcast_status(execution_id, status, exit_code)
+                    await ws_manager.broadcast_execution_update(
+                        script_id=script_id,
+                        execution_id=execution_id,
+                        event="status",
+                        status=status,
+                        exit_code=exit_code,
+                    )
+
+                except asyncio.CancelledError:
                     log_entry = await self.add_log(
                         db,
                         execution_id,
-                        f"Script completed successfully with exit code {exit_code}",
-                        stream="stdout",
-                        level="INFO",
+                        "Execution was cancelled",
+                        stream="stderr",
+                        level="ERROR",
                     )
                     await ws_manager.broadcast_log(execution_id, log_entry)
-                else:
-                    status = "failed"
+                    await self.update_execution_status(db, execution_id, "cancelled", exit_code=-1)
+                    await ws_manager.broadcast_status(execution_id, "cancelled", -1)
+                    await ws_manager.broadcast_execution_update(
+                        script_id=script_id, execution_id=execution_id, event="status", status="cancelled", exit_code=-1
+                    )
+                    self.active_processes.pop(execution_id, None)
+                    raise
+
+                except Exception as e:
                     log_entry = await self.add_log(
-                        db, execution_id, f"Script failed with exit code {exit_code}", stream="stderr", level="ERROR"
+                        db,
+                        execution_id,
+                        f"Execution error: {str(e)}",
+                        stream="stderr",
+                        level="ERROR",
                     )
                     await ws_manager.broadcast_log(execution_id, log_entry)
+                    await self.update_execution_status(db, execution_id, "failed", exit_code=-1)
+                    await ws_manager.broadcast_status(execution_id, "failed", -1)
+                    await ws_manager.broadcast_execution_update(
+                        script_id=script_id, execution_id=execution_id, event="status", status="failed", exit_code=-1
+                    )
+                    self.active_processes.pop(execution_id, None)
 
-                await self.update_execution_status(db, execution_id, status, exit_code)
-                await ws_manager.broadcast_status(execution_id, status, exit_code)
-                await ws_manager.broadcast_execution_update(
-                    script_id=script_id, execution_id=execution_id, event="status", status=status, exit_code=exit_code
-                )
-
-            except asyncio.CancelledError:
-                log_entry = await self.add_log(
-                    db,
-                    execution_id,
-                    "Execution was cancelled",
-                    stream="stderr",
-                    level="ERROR",
-                )
-                await ws_manager.broadcast_log(execution_id, log_entry)
-                await self.update_execution_status(db, execution_id, "cancelled", exit_code=-1)
-                await ws_manager.broadcast_status(execution_id, "cancelled", -1)
-                await ws_manager.broadcast_execution_update(
-                    script_id=script_id, execution_id=execution_id, event="status", status="cancelled", exit_code=-1
-                )
-                self.active_processes.pop(execution_id, None)
-                raise
-
-            except Exception as e:
-                log_entry = await self.add_log(
-                    db,
-                    execution_id,
-                    f"Execution error: {str(e)}",
-                    stream="stderr",
-                    level="ERROR",
-                )
-                await ws_manager.broadcast_log(execution_id, log_entry)
-                await self.update_execution_status(db, execution_id, "failed", exit_code=-1)
-                await ws_manager.broadcast_status(execution_id, "failed", -1)
-                await ws_manager.broadcast_execution_update(
-                    script_id=script_id, execution_id=execution_id, event="status", status="failed", exit_code=-1
-                )
-                self.active_processes.pop(execution_id, None)
+        finally:
+            self.active_tasks.pop(execution_id, None)
 
     async def stop_execution(self, db: AsyncSession, execution_id: uuid.UUID) -> ScriptExecution:
         execution = await self.get_execution(db, execution_id)
@@ -277,8 +300,8 @@ class ExecutionService:
                     db,
                     execution_id,
                     "Execution stopped by user",
-                    stream="stderr",
-                    level="ERROR",
+                    stream="stdout",
+                    level="INFO",
                 )
 
             except Exception as e:
@@ -286,8 +309,17 @@ class ExecutionService:
 
             finally:
                 self.active_processes.pop(execution_id, None)
+        else:
+            task = self.active_tasks.get(execution_id)
+            if task and not task.done():
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+                self.active_tasks.pop(execution_id, None)
 
-        await self.update_execution_status(db, execution_id, "cancelled", exit_code=-1)
+        updated = await self.update_execution_status(db, execution_id, "cancelled", exit_code=-1)
         await ws_manager.broadcast_execution_update(
             script_id=execution.script_id,
             execution_id=execution_id,
@@ -296,4 +328,4 @@ class ExecutionService:
             exit_code=-1,
         )
 
-        return execution
+        return updated

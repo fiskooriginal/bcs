@@ -4,6 +4,12 @@ import type { ScriptExecution, ScriptLog } from '@/types';
 const PAGE_SIZE = 20;
 
 export const executionsApi = {
+  getExecution: async (executionId: string): Promise<ScriptExecution> => {
+    const response = await apiClient.get<ScriptExecution>(
+      `/executions/${executionId}`
+    );
+    return response.data;
+  },
   getScriptExecutions: async (
     scriptId: string,
     params?: { limit?: number; offset?: number }

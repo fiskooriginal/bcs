@@ -42,6 +42,18 @@ export const useScriptExecutionsInfinite = (scriptId: string) => {
   });
 };
 
+export const useExecution = (executionId: string) => {
+  return useQuery({
+    queryKey: ['executions', executionId],
+    queryFn: () => executionsApi.getExecution(executionId),
+    enabled: !!executionId,
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      return status === 'running' || status === 'pending' ? 2000 : false;
+    },
+  });
+};
+
 export const useExecutionLogs = (executionId: string) => {
   return useQuery({
     queryKey: ['executions', executionId, 'logs'],
@@ -50,13 +62,18 @@ export const useExecutionLogs = (executionId: string) => {
   });
 };
 
-export const useStopExecution = () => {
+export const useStopExecution = (scriptId?: string) => {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: (executionId: string) => executionsApi.stop(executionId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['executions'] });
+    onSuccess: (_, executionId) => {
+      queryClient.invalidateQueries({ queryKey: ['executions', executionId] });
+      queryClient.invalidateQueries({ queryKey: ['executions', executionId, 'logs'] });
+      if (scriptId) {
+        queryClient.invalidateQueries({ queryKey: ['scripts', scriptId, 'executions'] });
+        queryClient.invalidateQueries({ queryKey: ['scripts', scriptId, 'executions-infinite'] });
+      }
     },
   });
 };

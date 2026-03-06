@@ -8,6 +8,9 @@ import {
 } from './ui/dialog';
 import { Button } from './ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
+import { Input } from './ui/input';
+import { Label } from './ui/label';
+import { Textarea } from './ui/textarea';
 import { CronEditor } from './CronEditor';
 import { LogViewer } from './LogViewer';
 import { ScriptEditor } from './ScriptEditor';
@@ -21,8 +24,9 @@ import {
 import {
   useScriptExecutionsInfinite,
   useScriptExecutionsCount,
+  useStopExecution,
 } from '@/hooks/useExecutions';
-import { Loader2, Save, Play, Pause, FileCode, Copy, Check } from 'lucide-react';
+import { Loader2, Save, Play, Pause, FileCode, Copy, Check, Square } from 'lucide-react';
 import { Badge } from './ui/badge';
 import { RelativeTime } from './RelativeTime';
 
@@ -54,6 +58,8 @@ export function ScriptDetailsDialog({
 
   const { data: executionsCountData } = useScriptExecutionsCount(scriptId || '');
 
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
   const [cronExpression, setCronExpression] = useState('');
   const [expandedExecutions, setExpandedExecutions] = useState<Set<string>>(new Set());
   const [copied, setCopied] = useState(false);
@@ -79,9 +85,12 @@ export function ScriptDetailsDialog({
   const updateMutation = useUpdateScript();
   const activateMutation = useActivateScript();
   const deactivateMutation = useDeactivateScript();
+  const stopMutation = useStopExecution(scriptId || undefined);
 
   useEffect(() => {
     if (script) {
+      setName(script.name || '');
+      setDescription(script.description || '');
       setCronExpression(script.cron_expression || '');
     }
   }, [script]);
@@ -113,6 +122,22 @@ export function ScriptDetailsDialog({
     },
     [hasNextPage, isFetchingNextPage, fetchNextPage]
   );
+
+  const handleSaveDetails = async () => {
+    if (!scriptId || !name.trim()) return;
+
+    try {
+      await updateMutation.mutateAsync({
+        id: scriptId,
+        data: {
+          name: name.trim(),
+          description: description.trim() || null,
+        },
+      });
+    } catch (error) {
+      console.error('Failed to update script details:', error);
+    }
+  };
 
   const handleSaveCron = async () => {
     if (!scriptId) return;
@@ -153,6 +178,10 @@ export function ScriptDetailsDialog({
     });
   };
 
+  const hasDetailsChanges =
+    script &&
+    (name.trim() !== (script.name || '') || description !== (script.description || ''));
+  const isDetailsValid = name.trim().length > 0;
   const hasCronChanges = script && cronExpression !== (script.cron_expression || '');
 
   if (!scriptId || !script) {
@@ -170,7 +199,7 @@ export function ScriptDetailsDialog({
             <div className="flex items-center gap-3">
               <FileCode className="h-6 w-6 text-primary" />
               <div>
-                <DialogTitle>{script.name}</DialogTitle>
+                <DialogTitle>{name || script.name}</DialogTitle>
                 <DialogDescription>{script.filename}</DialogDescription>
               </div>
             </div>
@@ -207,8 +236,9 @@ export function ScriptDetailsDialog({
           </div>
         </DialogHeader>
 
-        <Tabs defaultValue="code" className="mt-4">
-          <TabsList className="grid w-full grid-cols-3">
+        <Tabs defaultValue="details" className="mt-4">
+          <TabsList className="grid w-full grid-cols-4">
+            <TabsTrigger value="details">Details</TabsTrigger>
             <TabsTrigger value="code">Code</TabsTrigger>
             <TabsTrigger value="executions">
               Executions
@@ -220,6 +250,60 @@ export function ScriptDetailsDialog({
             </TabsTrigger>
             <TabsTrigger value="schedule">Schedule</TabsTrigger>
           </TabsList>
+
+          <TabsContent value="details" className="space-y-4 mt-4">
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="script-name">Name</Label>
+                <Input
+                  id="script-name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Script display name"
+                  maxLength={255}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Names may be duplicated; filename is unique
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="script-description">Description</Label>
+                <Textarea
+                  id="script-description"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Optional description"
+                  rows={4}
+                  className="resize-none"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Filename</Label>
+                <Input value={script.filename} disabled className="font-mono" />
+                <p className="text-xs text-muted-foreground">
+                  File path (read-only)
+                </p>
+              </div>
+
+              <Button
+                onClick={handleSaveDetails}
+                disabled={
+                  !hasDetailsChanges ||
+                  !isDetailsValid ||
+                  updateMutation.isPending
+                }
+              >
+                {updateMutation.isPending ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="mr-2 h-4 w-4" />
+                )}
+                Save Details
+              </Button>
+            </div>
+          </TabsContent>
 
           <TabsContent value="code" className="space-y-4 mt-4">
             <div className="flex items-center justify-between gap-2">
@@ -289,6 +373,8 @@ export function ScriptDetailsDialog({
                                   ? 'default'
                                   : latestExecution.status === 'failed'
                                   ? 'destructive'
+                                  : latestExecution.status === 'cancelled'
+                                  ? 'outline'
                                   : 'secondary'
                               }
                             >
@@ -312,6 +398,22 @@ export function ScriptDetailsDialog({
                               dateString={latestExecution.started_at}
                               className="text-sm text-muted-foreground"
                             />
+                            {(latestExecution.status === 'running' ||
+                              latestExecution.status === 'pending') && (
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                onClick={() => stopMutation.mutate(latestExecution.id)}
+                                disabled={stopMutation.isPending}
+                              >
+                                {stopMutation.isPending ? (
+                                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                ) : (
+                                  <Square className="h-4 w-4 mr-2" />
+                                )}
+                                Stop
+                              </Button>
+                            )}
                             {onExecutionOpen && (
                               <Button
                                 size="sm"
@@ -362,6 +464,8 @@ export function ScriptDetailsDialog({
                                       ? 'default'
                                       : execution.status === 'failed'
                                       ? 'destructive'
+                                      : execution.status === 'cancelled'
+                                      ? 'outline'
                                       : 'secondary'
                                   }
                                 >

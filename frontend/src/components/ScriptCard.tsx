@@ -154,6 +154,8 @@ export function ScriptCard({ script }: ScriptCardProps) {
                     ? 'default'
                     : lastExecution.status === 'failed'
                     ? 'destructive'
+                    : lastExecution.status === 'cancelled'
+                    ? 'outline'
                     : 'secondary'
                 }
                 className={

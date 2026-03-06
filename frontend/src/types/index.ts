@@ -10,6 +10,8 @@ export interface Script {
 }
 
 export interface ScriptUpdate {
+  name?: string | null;
+  description?: string | null;
   cron_expression?: string | null;
 }
 
