@@ -1,5 +1,5 @@
 [project]
-name = "bcs-backend"
+name = "python-backend"
 version = "0.1.0"
 description = "Python Script Scheduler Service - Backend"
 requires-python = ">=3.12"

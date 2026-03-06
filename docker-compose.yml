@@ -1,9 +1,9 @@
-version: '3.8'
+version: "3.8"
 
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: bcs-postgres
+    container_name: postgres
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
@@ -25,7 +25,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: bcs-backend
+    container_name: python-backend
     restart: unless-stopped
     environment:
       POSTGRES_HOST: ${POSTGRES_HOST}
@@ -38,7 +38,6 @@ services:
       BACKEND_RELOAD: ${BACKEND_RELOAD}
       APSCHEDULER_TIMEZONE: ${APSCHEDULER_TIMEZONE}
       SECRET_KEY: ${SECRET_KEY}
-      ENVIRONMENT: ${ENVIRONMENT}
     ports:
       - "8001:8001"
     volumes:
